@@ -27,6 +27,9 @@ from the final approximation of the posterior, or additionally both the final st
 importance probabilities for the returned samples, allowing the user to sample an unlimited number of data
 points and to investigate the importance probabilities to ensure a reasonable distribution of the latter.
 
+If you use 'gaussbock' or derive methodology or implementations from it, please cite the authors listed in
+this docstring and the paper, which will appear on arXiv shortly and, subsequently, in a suitable journal.
+
 Quickstart:
 -----------
 If you want to start quickly, 'gaussbock' only NEEDS three inputs, although there are more than that:
@@ -604,17 +607,17 @@ def importance_sampling(samples,
     if return_weights == False:
         # Calculate the importance probabilities for the purpose of subsequent resampling
         importance_probability = np.exp(importance_weights)
-        importance_probability = np.divide(importance_probability, sum(importance_probability))
         # Smoothe the importance probabilities with truncation to penalize dominant samples
         smoothed_probability = weight_truncation(mixture_samples = mixture_samples,
                                                  importance_probability = importance_probability,
                                                  truncation_alpha = truncation_alpha)
-
+        # Calculate the importance probabilities for the purpose of subsequent resampling
+        importance_probability = np.divide(smoothed_probability, sum(smoothed_probability))
         # Create a vector of index frequencies as weighted by the calculated probabilities
         sampling_index = np.random.choice(a = samples.shape[0],
                                           size = mixture_samples,
                                           replace = True,
-                                          p = smoothed_probability)
+                                          p = importance_probability)
         # Build a set of data points in accordance with the created vector of frequencies
         importance_samples = samples[sampling_index]
         return importance_samples
