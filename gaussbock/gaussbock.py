@@ -376,7 +376,7 @@ def gaussbock(parameter_ranges,
         if input_pool is None:
             pool.close()
 
-        return output
+        return results
 
 def gaussbock_emcee(parameter_ranges,
                     emcee_walkers,
