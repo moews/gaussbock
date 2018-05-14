@@ -352,10 +352,8 @@ def gaussbock(parameter_ranges,
         print('PROCESS: Checking and preparing returns ...')
         print('-------------------------------------------\n')
         # Check whether to return the importance weights and the model
-        if weights_and_model == False:
-            print('NOTE: Successful termination; samples are being returned')
-            return samples
-        if weights_and_model == True:
+
+        if weights_and_model:
             # Get the importance weights for the final set of data points
             importance_weights = importance_sampling(samples = samples,
                                                      model = mixture_model,
@@ -367,10 +365,18 @@ def gaussbock(parameter_ranges,
                                                      pool = pool,
                                                      parameter_number = parameter_number,
                                                      truncation_alpha = truncation_alpha)
-        # Stop the pool at this point to avoid simply letting the process hang indefinitely
-        pool.close()
-        print('NOTE: Successful termination; samples, weights and model are being returned')
-        return [samples, importance_weights, mixture_model]
+            # Stop the pool at this point to avoid simply letting the process hang indefinitely
+            print('NOTE: Successful termination; samples, weights and model are being returned')
+            results = (samples, importance_weights, mixture_model)
+
+        else:
+            print('NOTE: Successful termination; samples are being returned')
+            results = samples
+
+        if input_pool is None:
+            pool.close()
+
+        return output
 
 def gaussbock_emcee(parameter_ranges,
                     emcee_walkers,
