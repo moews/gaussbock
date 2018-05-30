@@ -737,3 +737,7 @@ def test():
     # pylab.show()
     # pylab.hist2d(p[:,0], p[:,1],            bins=30)
     # pylab.show()
+
+
+if __name__ == '__main__':
+    test()
