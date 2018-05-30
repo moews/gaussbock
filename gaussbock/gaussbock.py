@@ -102,15 +102,15 @@ schwimmbad 0.3.0
 NumPy 1.14.0
 """
 # Import the necessary libraries
-import sys
 import numpy as np
 import emcee as ec
-from scipy.stats import halfnorm
 from schwimmbad import SerialPool, MultiPool, MPIPool
 from sklearn.mixture import BayesianGaussianMixture as BGM
 from sklearn.neighbors import KernelDensity as KD
 
-def gaussbock(parameter_ranges,
+
+class Gaussbock:
+    def __init__(self, parameter_ranges,
               posterior_evaluation,
               output_samples,
               initial_samples = ['automatic', 50, 1000],
@@ -124,248 +124,240 @@ def gaussbock(parameter_ranges,
               model_verbosity = 1,
               mpi_parallelization = False,
               processes = 1,
-              weights_and_model = False,
               truncation_alpha = 2.0,
               model_selection = None,
               kde_bandwidth = 0.5,
-              pool = None,
-              ):
-    """Sample data points from a parameter space's approximated probability distribution.
+              pool = None):
+        self.parameter_ranges = parameter_ranges
+        self.posterior_evaluation = posterior_evaluation
+        self.output_samples = output_samples
+        self.initial_samples = initial_samples
+        self.gaussbock_iterations = gaussbock_iterations
+        self.mixture_samples = mixture_samples
+        self.em_iterations = em_iterations
+        self.tolerance_range = tolerance_range
+        self.model_components = model_components
+        self.model_covariance = model_covariance
+        self.parameter_init = parameter_init
+        self.model_verbosity = model_verbosity
+        self.mpi_parallelization = mpi_parallelization
+        self.processes = processes
+        self.truncation_alpha = truncation_alpha
+        self.model_selection = model_selection
+        self.kde_bandwidth = kde_bandwidth
+        self.pool = pool_type(mpi_parallelization = self.mpi_parallelization, 
+                              processes = self.processes, 
+                              pool=pool)
 
-    This is the primary function of 'gaussbock', allowing access to its functionality
-    with one simple function call. Most parameters default to reasonably well-behaved
-    values and don't need to be customized to get good results. The only parameters that
-    the user has to specify is the allowed range for each variable (i.e. dimension), an
-    evaluation function that takes one data point and returns its posterior probability,
-    and the desired number of samples from the approximated posterior distribution.
+        # We should close the pool if we made it ourself and it is an MPI pool
+        self.should_close_pool = (pool is not None) and self.mpi_parallelization
 
-    Parameters:
-    -----------
-    parameter_ranges : array-like
-        The allowed range for each parameter, signified by a lower and upper limit, with
-        one row per parameter, and lower and upper limits in the first and second column.
+        self.parameter_number = self.parameter_ranges.shape[0]
 
-    posterior_evaluation : function
-        The evaluation function that takes a single data point in the parameter space and
-        then returns the logarithmic posterior value for the specific given data point.
+        # If not chosen, set the type of model for fitting depending on the number of dimensions
+        if self.model_selection == None:
+            if self.parameter_number <= 2:
+                self.model_selection = 'kde'
+            else:
+                self.model_selection = 'gmm'
+        # Assign a reasonable default value to be used as the maximal number of models to fit
+        if self.model_components == None:
+            self.model_components = int(np.ceil((2 / 3) * self.parameter_number))
 
-    output_samples : int
-        The number of samples generated from the final model's posterior approximation.
 
-    initial_samples : {['automatic', int, int], ['custom', array-like]},
-                      defaults to ['automatic', 50, 1000]
-        The specification whether 'emcee' should be used to generate the initial set of
-        data points, with the number of walkers and the number of chain steps specified,
-        or whether a custom pre-prepared set of data points should be used instead.
 
-    gaussbock_iterations : int, defaults to 10
-        The number of iterations that gaussbock should circle through to achieve a fit.
+    def parameter_check(self):
+        """Check all parameters for conformance with the required parameter specifications.
 
-    mixture_samples : int, defaults to 10000
-        The number of samples to be drawn from the model before each importance sampling.
+        Sometimes, users might provide parameters in formats or with values that aren't
+        expected and would, therefore, lead to a crash. In order to prevent waiting for the
+        code to reach such a breaking point, all parameters are checked in the beginning.
+        The code will terminate with a descriptive error message in case of discrepancies.
+        """
+        # Create a vector of boolean values to keep track of incorrect inputs
+        incorrect_inputs = np.zeros(19, dtype = bool)
+        # Check if the parameter 'parameter_ranges' satisfies the specifications
+        if not (type(self.parameter_ranges) == np.ndarray and self.parameter_ranges.shape[1] == 2
+                and np.all([self.parameter_ranges[i, 0] < self.parameter_ranges[i, 1]
+                for i in range(0, self.parameter_ranges.shape[1])])):
+            incorrect_inputs[0] = True
+        # Check if the parameter 'posterior_evaluation' is a suitable function
+        try:
+            # Extract the provided minimum and maximum allowed values for all of the parameters
+            low, high = self.parameter_ranges[:, 0], self.parameter_ranges[:, 1]
+            # Draw a random test data point for the function from the allowed parameter ranges
+            test_point = np.random.uniform(low = low, high = high)
+            try:
+                test_posterior = self.posterior_evaluation(test_point)
+            except:
+                incorrect_inputs[1] = True
+        except:
+            # Let the function resume, as a faulty 'parameter_ranges' will terminate
+            pass
+        # Check if the provided output parameter 'output_samples' is an integer
+        if not (type(self.output_samples) == int and self.output_samples > 0):
+            incorrect_inputs[2] = True
+        # Check if the parameter 'input_samples' is withing the allowed set
+        if not self.initial_samples[0] in ['automatic', 'custom']:
+            incorrect_inputs[3] = True
+        if self.initial_samples[0] == 'automatic' and (len(self.initial_samples) != 3
+            or [type(self.initial_samples[i]) for i in range(0,3)] != [str, int, int]):
+            incorrect_inputs[3] = True
+        elif self.initial_samples[0] == 'custom' and (len(self.initial_samples) != 2
+            or [type(self.initial_samples[i]) for i in range(0,2)] != [str, np.ndarray]):
+            incorrect_inputs[3] = True
+        # Check if the provided parameter 'gaussbock_iterations' is an integer
+        if not (type(self.gaussbock_iterations) == int and self.gaussbock_iterations > 0):
+            incorrect_inputs[4] = True
+        # Check if the parameter 'mixture_samples' for the model is an integer
+        if not (type(self.mixture_samples) == int and self.mixture_samples > 0):
+            incorrect_inputs[5] = True
+        # Check if the parameter 'em_iterations' for the model is an integer
+        if not (type(self.em_iterations) == int and self.em_iterations > 0):
+            incorrect_inputs[6] = True
+        # Check if the parameter 'tolerance_range' satisfies the specifications
+        if not (type(self.tolerance_range) == list and self.tolerance_range[0] > self.tolerance_range[1]):
+            incorrect_inputs[7] = True
+        # Check if the parameter 'model_components' for the model is an integer
+        if not ((type(self.model_components) == int and self.model_components > 0) or self.model_components == None):
+            incorrect_inputs[8] = True
+        # Check if the parameter 'model_covariance' is within the allowed set
+        if not self.model_covariance in ['full', 'tied', 'diag', 'spherical']:
+            incorrect_inputs[9] = True
+        # Check if the parameter 'parameter_init' is within the allowed set
+        if not self.parameter_init in ['kmeans', 'random']:
+            incorrect_inputs[10] = True
+        # Check if the parameter 'model_verbosity' is within the allowed set
+        if not self.model_verbosity in [0, 1, 2]:
+            incorrect_inputs[11] = True
+        # Check if the parameter 'mpi_parallelization' is within the allowed set
+        if not self.mpi_parallelization in [True, False]:
+            incorrect_inputs[12] = True
+        # Check if the parameter 'processes' for parallelization is an integer
+        if not (type(self.processes) == int and self.processes > 0):
+            incorrect_inputs[13] = True
+        # Check if the parameter 'weights_and_model' is within the allowed set
+        # if not self.weights_and_model in [True, False]:
+        #     incorrect_inputs[14] = True
+        # Check whether the number of walkers is at least twice the parameter number
+        if (self.initial_samples[0] == 'automatic' and len(self.initial_samples) == 3
+            and [type(self.initial_samples[i]) for i in range(0,3)] == [str, int, int]):
+            try:
+                if not self.initial_samples[1] > (2 * len(self.parameter_ranges)):
+                    incorrect_inputs[15] = True
+            except:
+                # Let the function resume, as a faulty 'parameter_ranges' will terminate
+                pass
+        # Check whether the truncation parameter falls within the allowed range
+        if not (type(self.truncation_alpha) == float and (0.0 <= self.truncation_alpha <= 3.0)):
+            incorrect_inputs[16] = True
+        # Check whether the model selection parameter is within the allowed set
+        if not self.model_selection in [None, 'gmm', 'kde']:
+            incorrect_inputs[17] = True
+        # Check whether the KDE bandwidth parameter is a positive float value
+        if not (type(self.kde_bandwidth) == float and self.kde_bandwidth > 0.0):
+            incorrect_inputs[18] = True
+        # Define error messages for each parameter in case of unsuitable inputs
+        errors = ['ERROR: parameter_ranges: 2-column numpy.ndarray, first column lower bounds',
+                  'ERROR: posterior_evaluation: Must be a suitable function for this problem',
+                  'ERROR: output_samples: Must be an integer above 0 to be a valid input',
+                  'ERROR: initial_samples: ["automatic", int, int] or ["custom", array-like]',
+                  'ERROR: gaussbock_iterations: Must be an integer above 0 to be a valid input',
+                  'ERROR: mixture_samples: Must be an integer above 0 to be a valid input',
+                  'ERROR: em_iterations: Must be an integer above zero to be a valid input',
+                  'ERROR: tolerance_range: List of the form [float, float], first value higher',
+                  'ERROR: model_components: Must be an integer above 0 to be a valid input',
+                  'ERROR: model_covariance: Must be from {"full", "tied", "diag", "spherical"}',
+                  'ERROR: parameter_init: Must be from {"kmeans", "random"} to be a valid input',
+                  'ERROR: model_verbosity: Must be from {0, 1, 2} to select the information level',
+                  'ERROR: mpi_parallelization: Must be from {True, False} to indicate MPI usage',
+                  'ERROR: processes: Must be an integer above 0 to be a valid input',
+                  'ERROR: weights_and_model: Must be from {True, False} to indicate the preference',
+                  'ERROR: initial_samples: No. of walkers must be > twice the number of parameters',
+                  'ERROR: truncation_alpha: Must be a float from [0.0, 3.0] to be a valid input',
+                  'ERROR: model_selection: Must be from {"gmm", "kde"} to be a valid input',
+                  'ERROR: kde_bandwidth: Must be a float above 0 to be a valid input']
+        # If there are any unsuitable inputs, print error messages and terminate
+        if any(incorrect_inputs):
+          errs = []
+            for i in range(0, len(errors)):
+                if incorrect_inputs[i]:
+                    print(errors[i])
+                    errs.append(errors[i])
+            raise ValueError("\n".join(errs))
 
-    em_iterations : int, defaults to 1000
-        The maximum number of expectation maximization iterations the model should run.
-
-    tolerance_range : list, defaults to [1e-2, 1e-7]
-        The two ends for the shrinking convergence threshold as a tuple [float, float].
-
-    model_components : int, defaults to rounding up (2 / 3) * the number of dimenzsions
-        The maximum number of Gaussians to be fitted to data points in each iteration.
-
-    model_covariance : {'full', 'tied', 'diag', 'spherical'}, defaults to 'full'
-        The type of covariance parameters the model should use for the fitting process.
-
-    parameter_init :  {'kmeans', 'random'}, defaults to 'random'
-        The method used to initialize the model's weights, the means and the covariances.
-
-    model_verbosity : {0, 1, 2}, defaults to 1
-        The amount of information that the model fitting should provide during runtime.
-
-    mpi_parallelization : boolean, defaults to False
-        The boolean value indicating whether to parallelize the code via an MPIPool.
-
-    processes : int, defaults to 1
-        The number of processes the code should invoke for its parallelizable parts.
-
-    weights_and_model : boolean, defaults to False
-        The boolean value indicating whether to return importance weights and the model.
-
-    truncation_alpha : float from [1.0, 3.0], defaults to 2.0
-        The truncation value for importance probability re-weighting. A higher value
-        leads to a more general fitting with strong truncation, whereas a smaller value
-        leads to a higher level of retaining dominant data points as such. It is generally
-        recommended to only alter this parameter if the resulting posterior approximation
-        is problematic and the issue can't be resolved by adjusting other parameters.
-
-    model_selection : {None, 'gmm', 'kde'}, defaults to None
-        The selection of the type of model that should be used for the fitting process,
-        i.e. either a variational Bayesian non-parametric GMM or kernel density estimation.
-
-    kde_bandwidth : float, defaults to 0.5
-        The kernel bandwidth that should be used in the case of kernel density estimation.
-
-    pool : pool object, defaults to None
-        If set, use this pool rather than constructing one internally.
-
-    Returns:
-    --------
-    samples : array-like or list
-        A set of samples of the size that is specified in the parameter output_samples if
-        'weights_and_model' is false, which is the default. If 'weights_and_model' is true,
-        a list with the above set of samples, the importance weights of the last model and
-        the model itself is returned. The list elements always follow this order:
-
-        0 : Samples generated with the final model
-        1 : Importance weights for the final model
-        2 : The final model itself to sample from
-
-    Attributes:
-    -----------
-    None
-    """
-    # Test all parameters for validity and terminate if not true
-    parameter_check(parameter_ranges = parameter_ranges,
-                    posterior_evaluation = posterior_evaluation,
-                    output_samples = output_samples,
-                    initial_samples = initial_samples,
-                    gaussbock_iterations = gaussbock_iterations,
-                    mixture_samples = mixture_samples,
-                    em_iterations = em_iterations,
-                    tolerance_range = tolerance_range,
-                    model_components = model_components,
-                    model_covariance = model_covariance,
-                    parameter_init = parameter_init,
-                    model_verbosity = model_verbosity,
-                    mpi_parallelization = mpi_parallelization,
-                    processes = processes,
-                    weights_and_model = weights_and_model,
-                    truncation_alpha = truncation_alpha,
-                    model_selection = model_selection,
-                    kde_bandwidth = kde_bandwidth)
-    # Get the number of dimensions that the algorithm operates in for the provided problem
-    parameter_number = parameter_ranges.shape[0]
-    # If not chosen, set the type of model for fitting depending on the number of dimensions
-    if model_selection == None:
-        if parameter_number <= 2:
-            model_selection = 'kde'
-        else:
-            model_selection = 'gmm'
-    # Assign a reasonable default value to be used as the maximal number of models to fit
-    if model_components == None:
-        model_components = int(np.ceil((2 / 3) * parameter_number))
-    # Establish the type of pool to be used for an eventual parallelization of the sampler
-    input_pool = pool
-    with pool_type(mpi_parallelization = mpi_parallelization, processes = processes, pool=input_pool) as pool:
+    def starting_point(self):
         # In case of using MPI, let worker processes wait for tasks from the master process
-        if mpi_parallelization == True and (input_pool is None):
-            if not pool.is_master():
-                pool.wait()
-                return
         # Check whether to get initial samples via emcee or use a set
-        if initial_samples[0] == 'automatic':
+        if self.initial_samples[0] == 'automatic':
 
-            emcee_walkers, emcee_steps = initial_samples[1:3]
+            emcee_walkers, emcee_steps = self.initial_samples[1:3]
             # Call the emcee-based function to get a set of MCMC samples
             print('PROCESS: Getting initial samples via an affine-invariant MCMC ensemble ...')
             print('--------------------------------------------------------------------------\n')
-            samples = gaussbock_emcee(parameter_ranges = parameter_ranges,
+            samples = self.initial_emcee(
                                       emcee_walkers = emcee_walkers,
-                                      emcee_steps = emcee_steps,
-                                      posterior_evaluation = posterior_evaluation,
-                                      mpi_parallelization = mpi_parallelization,
-                                      processes = processes,
-                                      pool = pool)
+                                      emcee_steps = emcee_steps
+                                      )
             print('===> DONE\n')
-        elif initial_samples[0] == 'custom':
+        elif self.initial_samples[0] == 'custom':
             print('NOTE: Using the user-provided set of initial samples\n')
-            samples = initial_samples[1]
+            samples = self.initial_samples[1]
+        return samples
+
+
+    def run(self, initial_samples, weights_and_model=True):
+        """
+        Run the complete sampling process
+        """
+        # Test all parameters for validity and terminate if not true
+        self.initial_samples = initial_samples
+        self.parameter_check()
+        # Get the number of dimensions that the algorithm operates in for the provided problem
+        
+        if (self.pool is not None) and self.mpi_parallelization:
+            if not self.pool.is_master():
+                pool.wait()
+                return
+
+        samples = self.starting_point()
+
 
         print('NOTE: Starting gaussbock iterations\n')
         # Loop over the provided number of iterations minus the last one
-        for i in range(gaussbock_iterations - 1):
+        for i in range(self.gaussbock_iterations - 1):
             print('ITERATION %d\n' % i)
             print('PROCESS: Fitting the model for iteration %d ...' % i)
             print('----------------------------------------------\n')
-            # Get the model-fitting tolerance level for the iteration
-            step_tolerance = dynamical_tolerance(tolerance_range = tolerance_range,
-                                                 gaussbock_iterations = gaussbock_iterations,
-                                                 step = i)
-            # Fit the model for the current data points and tolerance
-            mixture_model = mixture_fit(samples = samples,
-                                        model_components = model_components,
-                                        model_covariance = model_covariance,
-                                        tolerance = step_tolerance,
-                                        em_iterations = em_iterations,
-                                        parameter_init = parameter_init,
-                                        model_verbosity = model_verbosity,
-                                        model_selection = model_selection,
-                                        kde_bandwidth = kde_bandwidth)
-            print('===> DONE\n')
-            # Sample a novel set of data points from the fitted model
-            if model_selection == 'gmm':
-                samples = mixture_model.sample(n_samples = mixture_samples * 1.5)[0]
-            if model_selection == 'kde':
-                samples = mixture_model.sample(n_samples = int(np.round(output_samples * 1.5)))
-            # Cut all of the data points outside of the allowed ranges
-            samples = range_cutoff(samples = samples,
-                                   parameter_ranges = parameter_ranges)
-            # Extract the required amount of samples from the now clean set
-            samples = samples[0:output_samples, :]
-            # Generate a new set of weighted and resampled data points
-            print('PROCESS: Importance sampling for re-weighted frequencies ...')
-            print('------------------------------------------------------------\n')
-            samples = importance_sampling(samples = samples,
-                                          model = mixture_model,
-                                          mixture_samples = mixture_samples,
-                                          posterior_evaluation = posterior_evaluation,
-                                          mpi_parallelization = mpi_parallelization,
-                                          processes = processes,
-                                          return_weights = False,
-                                          pool = pool,
-                                          parameter_number = parameter_number,
-                                          truncation_alpha = truncation_alpha)
-            print('===> DONE\n')
+            samples = self.iterate(i, samples)
+
+
+
         # Fit the final model to the data points provided by the loop
+        # We do one final iteration so we can potentially generate more samples here.
         print('PROCESS: Fitting the final model ...')
         print('------------------------------------\n')
-        mixture_model = mixture_fit(samples = samples,
-                                    model_components = model_components,
-                                    model_covariance = model_covariance,
-                                    tolerance = tolerance_range[1],
-                                    em_iterations = em_iterations,
-                                    parameter_init = parameter_init,
-                                    model_verbosity = model_verbosity,
-                                    model_selection = model_selection,
-                                    kde_bandwidth = kde_bandwidth)
+        tolerance = self.tolerance_range[1]
+        mixture_model = self.mixture_fit(samples, tolerance)
         print('\n===> DONE\n')
+
         # Sample 150% of the required amount of samples from the model
-        if model_selection == 'gmm':
-            samples = mixture_model.sample(n_samples = output_samples * 1.5)[0]
-        if model_selection == 'kde':
-            samples = mixture_model.sample(n_samples = int(np.round(output_samples * 1.5)))
+        if self.model_selection == 'gmm':
+            samples = mixture_model.sample(n_samples = self.output_samples * 1.5)[0]
+        if self.model_selection == 'kde':
+            samples = mixture_model.sample(n_samples = int(np.round(self.output_samples * 1.5)))
         # Cut all the data points falling outside of the allowed ranges
-        samples = range_cutoff(samples = samples,
-                               parameter_ranges = parameter_ranges)
+        samples = self.range_cutoff(samples)
+
+        importance_weights = self.importance_sampling(samples, mixture_model, return_weights=True)
+
         # Extract the required amount of samples from the now clean set
-        samples = samples[0:output_samples, :]
+        samples = samples[0:self.output_samples, :]
         print('PROCESS: Checking and preparing returns ...')
         print('-------------------------------------------\n')
         # Check whether to return the importance weights and the model
 
         if weights_and_model:
-            # Get the importance weights for the final set of data points
-            importance_weights = importance_sampling(samples = samples,
-                                                     model = mixture_model,
-                                                     mixture_samples = mixture_samples,
-                                                     posterior_evaluation = posterior_evaluation,
-                                                     mpi_parallelization = mpi_parallelization,
-                                                     processes = processes,
-                                                     return_weights = True,
-                                                     pool = pool,
-                                                     parameter_number = parameter_number,
-                                                     truncation_alpha = truncation_alpha)
-            # Stop the pool at this point to avoid simply letting the process hang indefinitely
             print('NOTE: Successful termination; samples, weights and model are being returned')
             results = (samples, importance_weights, mixture_model)
 
@@ -373,78 +365,285 @@ def gaussbock(parameter_ranges,
             print('NOTE: Successful termination; samples are being returned')
             results = samples
 
-        if input_pool is None:
-            pool.close()
+        if self.should_close_pool:
+            self.pool.close()
+
 
         return results
 
-def gaussbock_emcee(parameter_ranges,
-                    emcee_walkers,
-                    emcee_steps,
-                    posterior_evaluation,
-                    mpi_parallelization,
-                    processes,
-                    pool):
-    """
-    Create an initial set of data points with an affine-invariant MCMC ensemble sampler.
+    def initial_emcee(self, emcee_walkers, emcee_steps):
+        """
+        Create an initial set of data points with an affine-invariant MCMC ensemble sampler.
 
-    While the iteartive method utilized in this code also works for an initial sample that
-    is drawn uniformly at random from high-dimensional parameter ranges, convergence of the
-    approximations towards a good fit to the true posterior distribution takes some time.
-    For this reason, an affine-invariant MCMC ensemble sampler is used to generate the first
-    set of data points that represent a very rough approximation to the true posterior.
+        While the iteartive method utilized in this code also works for an initial sample that
+        is drawn uniformly at random from high-dimensional parameter ranges, convergence of the
+        approximations towards a good fit to the true posterior distribution takes some time.
+        For this reason, an affine-invariant MCMC ensemble sampler is used to generate the first
+        set of data points that represent a very rough approximation to the true posterior.
 
-    Parameters:
-    -----------
-    parameter_ranges : array-like
-        The allowed range for each parameter, signified by a lower and upper limit, with
-        one row per parameter, and lower and upper limits in the first and second column.
+        Parameters:
+        -----------
+        emcee_walkers : int
+            The number of separate walkers that emcee should deploy to gather first samples.
 
-    emcee_walkers : int
-        The number of separate walkers that emcee should deploy to gather first samples.
+        emcee_steps : int
+            The number of steps in a chain that emcee walkers should take before termination.
 
-    emcee_steps : int
-        The number of steps in a chain that emcee walkers should take before termination.
+        Returns:
+        --------
+        samples : array-like
+            An initial set of distribution-approximating samples as chains of MCMC walkers.
 
-    posterior_evaluation : function
-        The evaluation function that takes a single data point in the parameter space and
-        then returns the logarithmic posterior value for the specific given data point.
+        Attributes:
+        -----------
+        None
+        """
+        # Extract the provided minimum and maximum allowed values for all of the parameters
+        low, high = self.parameter_ranges[:, 0], self.parameter_ranges[:, 1]
+        # Generate starting points for emcee by drawing uniformly-distributed random samples
+        starting_points = [np.random.uniform(low = low, high = high) for i in range(emcee_walkers)]
+        # Get the number of parameters, i.e. the number of dimensions, as an input for emcee
+        # Create a sampler with the number of walkers, dimensions and evaluation function
+        emcee_sampler = ec.EnsembleSampler(nwalkers = emcee_walkers,
+                                           dim = self.parameter_number,
+                                           lnpostfn = self.posterior_evaluation,
+                                           pool = self.pool)
+        # Run the sampler with the generated starting points and a step number per walker
+        emcee_sampler.run_mcmc(pos0 = starting_points,
+                               N = emcee_steps)
+        # Access the sampler's chain flattened to the number of chain links and the dimension
+        emcee_samples = emcee_sampler.flatchain
+        return emcee_samples
 
-    mpi_parallelization : boolean
-        The boolean value indicating whether to parallelize the code via an MPIPool.
+    def iterate(self, i, samples):
+        # Get the model-fitting tolerance level for the iteration
+        step_tolerance = self.dynamical_tolerance(i)
+        # Fit the model for the current data points and tolerance
+        mixture_model = self.mixture_fit(samples, step_tolerance)
 
-    processes : int
-        The number of processes the code should invoke for its parallelizable parts.
+        # Sample a novel set of data points from the fitted model
+        if self.model_selection == 'gmm':
+            samples = mixture_model.sample(n_samples = self.mixture_samples * 1.5)[0]
+        elif self.model_selection == 'kde':
+            samples = mixture_model.sample(n_samples = int(np.round(self.output_samples * 1.5)))
+        # Cut all of the data points outside of the allowed ranges
+        samples = self.range_cutoff(samples)
+        
+        # Extract the required amount of samples from the now clean set
+        print("JAZ NOT SURE ABOUT THIS BIT - DOES IT HURT TO HAVE EXTRA SAMPLES?")
+        samples = samples[0:self.output_samples, :]
+        
+        # Generate a new set of equally weighted samples
+        print('PROCESS: Importance sampling for re-weighted frequencies ...')
+        print('------------------------------------------------------------\n')
+        samples = self.importance_sampling(samples,mixture_model, return_weights=False)
+        print('===> DONE\n')
+        return samples
 
-    pool : schwimmbad pool
-        The pool created via 'schwimmbad' and returned by the pool_type() function.
 
-    Returns:
-    --------
-    samples : array-like
-        An initial set of distribution-approximating samples as chains of MCMC walkers.
+    def range_cutoff(self, samples):
+        """Cut data points which fall outside of allowed parameter ranges from a data set.
 
-    Attributes:
-    -----------
-    None
-    """
-    # Extract the provided minimum and maximum allowed values for all of the parameters
-    low, high = parameter_ranges[:, 0], parameter_ranges[:, 1]
-    # Generate starting points for emcee by drawing uniformly-distributed random samples
-    starting_points = [np.random.uniform(low = low, high = high) for i in range(emcee_walkers)]
-    # Get the number of parameters, i.e. the number of dimensions, as an input for emcee
-    parameter_number = parameter_ranges.shape[0]
-    # Create a sampler with the number of walkers, dimensions and evaluation function
-    emcee_sampler = ec.EnsembleSampler(nwalkers = emcee_walkers,
-                                       dim = parameter_number,
-                                       lnpostfn = posterior_evaluation,
-                                       pool = pool)
-    # Run the sampler with the generated starting points and a step number per walker
-    emcee_sampler.run_mcmc(pos0 = starting_points,
-                           N = emcee_steps)
-    # Access the sampler's chain flattened to the number of chain links and the dimension
-    emcee_samples = emcee_sampler.flatchain
-    return emcee_samples
+        As some user-provided evaluation functions for calculating posterior probabilites of
+        single data points might prohibit values outside of certain ranges, e.g. by resulting
+        in minus infinity as the returned value, this function cuts all data points from a
+        set of data points with such a parameter range violation for one or more variables.
+
+        Parameters:
+        -----------
+        samples : array-like
+            The set data points from which the ones outside the allowed ranges should be cut.
+
+        Returns:
+        --------
+        samples : array-like
+            A sub-set of the provided data points which falls within the allowed ranges.
+
+        Attributes:
+        -----------
+        None
+        """
+        # Extract the provided minimum and maximum allowed values for all of the parameters
+        low, high = self.parameter_ranges[:, 0], self.parameter_ranges[:, 1]
+        # Retain only the data points that fall within the allowed range for each parameter
+        samples = samples[np.all(np.logical_and(samples > low, samples < high), axis = 1), :]
+        return samples
+
+
+    def weight_truncation(self, importance_probability):
+        """Transform the handed probabilities to combat dominating data points
+
+        This function transforms provided probabilities via an implementation of truncated
+        importance sampling and re-normalizing the results. The transformation leads to a
+        downgrading of otherwise dominating high-probability samples for the re-sampling.
+
+        Parameters:
+        -----------
+        importance_probability : array-like
+            The one-dimensional array of importance probabilities that should be smoothed.
+
+
+        Returns:
+        --------
+        normalized_result : array-like
+            A transformed array of probabilities with slightly less pronounced inequalities.
+
+        Attributes:
+        -----------
+        None
+        """
+        # Compute the mean of the importance probabilities provided as input
+        mean_probability = np.mean(importance_probability)
+        comparison_term = self.mixture_samples**(1./self.truncation_alpha) * mean_probability
+        # Calculate the element-wise minimum comparison between the given terms
+        truncated_probability = np.minimum(importance_probability, comparison_term)
+        # Normalize the results to ensure their full usability as probabilities
+        normalized_result = truncated_probability / truncated_probability.sum()
+        return normalized_result
+
+
+    def importance_sampling(self, samples, model, return_weights):
+        """Re-sample provided data points according to their computed importance weights.
+
+        Importance sampling is a general estimation approach for distributions if only samples
+        from another distribution are available. In the given case of this code, that other
+        distribution is the one approximated by a fitted model per iteration. By handing a
+        set of data points, a model and the user-specified evaluation function for posterior
+        probabilities to this function, it re-samples these data points with frequency values
+        derived from their respective importance weights for a better fit of the samples.
+
+        Parameters:
+        -----------
+        return_weights : boolean
+            The boolean value indicating whether to simply return the importance weights.
+
+        Returns:
+        --------
+        samples : array-like
+            A set of data points re-sampled due to frequencies based on importance weights.
+
+        Attributes:
+        -----------
+        None
+        """
+        # Apply the procided evaluation function to get the posteriors of all data points
+        posteriors = list(self.pool.map(self.posterior_evaluation, samples))
+        # Use the model's built-in scoring function to get the posteriors w.r.t. the model
+        proposal = model.score_samples(X = samples)
+        # Get the importance weights for all the data points via element-wise subtraction
+        print("JAZ Need to do truncation here too")
+        importance_weights = posteriors - proposal
+        # Check whether the function is called to calculate and return the importance weights
+        if return_weights:
+            return importance_weights
+        else:
+            # Calculate the importance probabilities for the purpose of subsequent resampling
+            importance_probability = np.exp(importance_weights)
+            # Smoothe the importance probabilities with truncation to penalize dominant samples
+            smoothed_probability = self.weight_truncation(importance_probability)
+            # Calculate the importance probabilities for the purpose of subsequent resampling
+            importance_probability = np.divide(smoothed_probability, sum(smoothed_probability))
+            # Create a vector of index frequencies as weighted by the calculated probabilities
+            sampling_index = np.random.choice(a = samples.shape[0],
+                                              size = self.mixture_samples,
+                                              replace = True,
+                                              p = importance_probability)
+            # Build a set of data points in accordance with the created vector of frequencies
+            importance_samples = samples[sampling_index]
+            return importance_samples
+
+
+    def mixture_fit(self, samples, tolerance):
+        """Fit a variational Bayesian non-parametric Gaussian mixture model to samples.
+
+        This function takes the parameters described below to initialize and then fit a
+        model to a provided set of data points. It returns a Scikit-learn estimator object
+        that can then be used to generate samples from the distribution approximated by the
+        model and score the log-probabilities of data points based on the returned model.
+
+
+        Parameters:
+        -----------
+        samples : array-like
+            The set of provided data points that the function's model should be fitted to.
+
+
+        Returns:
+        --------
+        model : sklearn estimator
+            A variational Bayesian non-parametric Gaussian mixture model fitted to samples.
+
+        Attributes:
+        -----------
+
+        fit(X) : Estimate a model's parameters with the expectation maximization algorithm.
+
+        sample(n_samples=1) : Generate a new set of random data points from fitted Gaussians.
+
+        score_samples(X) : Calculate the weighted log-probabilities for each data point.
+        """
+        # Check which type of model should be used for the iterative fitting process
+        if self.model_selection == 'gmm':
+            # Initialize a variational Bayesian non-parametric GMM for fitting
+            model = BGM(n_components = self.model_components,
+                        covariance_type = self.model_covariance,
+                        tol = tolerance,
+                        max_iter = self.em_iterations,
+                        init_params = self.parameter_init,
+                        verbose = self.model_verbosity,
+                        verbose_interval = 10,
+                        warm_start = False,
+                        random_state = 42,
+                        weight_concentration_prior_type = 'dirichlet_process')
+        elif self.model_selection == 'kde':
+            model = KD(bandwidth = self.kde_bandwidth,
+                       kernel = 'gaussian',
+                       metric = 'euclidean',
+                       algorithm = 'auto',
+                       breadth_first = True,
+                       atol = 0.0,
+                       rtol = tolerance)
+        # Fit the previously initialized model to the provided data points
+        model.fit(np.asarray(samples))
+        print(model)
+        print(dir(model))
+        return model
+
+
+    def dynamical_tolerance(self, step):
+        """Calculate the model's convergence threshold dynamically for the given iteration.
+
+        The variational Bayesian non-parametric Gaussian mixture model used in this code
+        requires a convergence threshold to terminate before reaching the maximum number
+        of model-fitting iterations. As the initial sample isn't a great fit for the true
+        posterior distribution, optimizing the fit to a very strict convergence threshold
+        isn't very sensible. Instead, the convergence threshold decreases linearly with
+        each full iteration, with the change from iteration to iteration being dependent
+        on the range that is provided by the user to allow customization to a problem.
+
+        Parameters:
+        -----------
+        step : int
+            the index of the current iteration, i.e. a counter to keep track of progress.
+
+        Returns:
+        --------
+        step_tolerance : float
+            A desired convergence threshold for the given step's model-fitting process.
+
+        Attributes:
+        -----------
+        None
+        """
+        # Difference between the high and low end of the tolerance range
+        difference = self.tolerance_range[0] - self.tolerance_range[1]
+        # Increase by which the tolerance level is tightened at each step
+        increase = difference / (self.gaussbock_iterations - 1)
+        # Tolerance for the current iteration the function was called for
+        step_tolerance = self.tolerance_range[0] - (step * increase)
+        return step_tolerance
+
+
 
 def pool_type(mpi_parallelization,
               processes,
@@ -487,18 +686,17 @@ def pool_type(mpi_parallelization,
         return pool
 
     # Check whether the utilization of an MPIPool is indicated via the input
-    if mpi_parallelization == True:
+    if mpi_parallelization:
         # If the use of an MPIPool is not enabled, print an error and terminate
         if not MPIPool.enabled():
-            print('ERROR: MPIPool must be enabled in order to parallelize via MPI')
-            sys.exit()
+            raise ValueError("ERROR: MPIPool must be enabled in order to parallelize via MPI")
         # If the use of an MPIPool is enabled, resume and wait if necessary
         else:
             pool = MPIPool()
             pool_indicator = 0
             print_variable = pool.size
     # Check whether the input allows for the utilization of a MultiPool instead
-    elif processes > 1 and MultiPool.enabled() == True:
+    elif processes > 1 and MultiPool.enabled():
         pool = MultiPool(processes = processes)
         pool_indicator = 1
         print_variable = processes
@@ -520,505 +718,22 @@ def pool_type(mpi_parallelization,
     print()
     return pool
 
-def range_cutoff(samples,
-                 parameter_ranges):
-    """Cut data points which fall outside of allowed parameter ranges from a data set.
 
-    As some user-provided evaluation functions for calculating posterior probabilites of
-    single data points might prohibit values outside of certain ranges, e.g. by resulting
-    in minus infinity as the returned value, this function cuts all data points from a
-    set of data points with such a parameter range violation for one or more variables.
 
-    Parameters:
-    -----------
-    samples : array-like
-        The set data points from which the ones outside the allowed ranges should be cut.
-
-    parameter_ranges : array-like
-        The allowed range for each parameter, signified by a lower and upper limit, with
-        one row per parameter, and lower and upper limits in the first and second column.
-
-    Returns:
-    --------
-    samples : array-like
-        A sub-set of the provided data points which falls within the allowed ranges.
-
-    Attributes:
-    -----------
-    None
-    """
-    # Extract the provided minimum and maximum allowed values for all of the parameters
-    low, high = parameter_ranges[:, 0], parameter_ranges[:, 1]
-    # Retain only the data points that fall within the allowed range for each parameter
-    samples = samples[np.all(np.logical_and(samples > low, samples < high), axis = 1), :]
-    return samples
-
-def importance_sampling(samples,
-                        model,
-                        mixture_samples,
-                        posterior_evaluation,
-                        mpi_parallelization,
-                        processes,
-                        return_weights,
-                        pool,
-                        parameter_number,
-                        truncation_alpha):
-    """Re-sample provided data points according to their computed importance weights.
-
-    Importance sampling is a general estimation approach for distributions if only samples
-    from another distribution are available. In the given case of this code, that other
-    distribution is the one approximated by a fitted model per iteration. By handing a
-    set of data points, a model and the user-specified evaluation function for posterior
-    probabilities to this function, it re-samples these data points with frequency values
-    derived from their respective importance weights for a better fit of the samples.
-
-    Parameters:
-    -----------
-    samples : array-like
-        The set of provided data points that importance sampling should be run on.
-
-    mixture_samples : int
-        The number of samples to be drawn from the model before each importance sampling.
-
-    posterior_evaluation : function
-        The evaluation function that takes a single data point in the parameter space and
-        then returns the logarithmic posterior value for the specific given data point.
-
-    mpi_parallelization : boolean
-        The boolean value indicating whether to parallelize the code via an MPIPool.
-
-    processes : int
-        The number of processes the code should invoke for its parallelizable parts.
-
-    return_weights : boolean
-        The boolean value indicating whether to simply return the importance weights.
-
-    pool : schwimmbad pool
-        The pool created via 'schwimmbad' and returned by the pool_type() function.
-
-    parameter_number : int
-        The number of dimensions that the algorithm operates in for the given problem.
-
-    truncation_alpha : float
-        The truncation value for importance probability re-weighting. This parameter must
-        be a float from the interval[1.0, 3.0]. A higher value leads to a looser fitting
-        with strong truncation, whereas a smaller value leads to a higher level of retaining
-        dominant data points as such. It is recommended to only alter this parameter if the
-        resulting posterior approximation is problematic and can't be otherwise resolved.
-
-    Returns:
-    --------
-    samples : array-like
-        A set of data points re-sampled due to frequencies based on importance weights.
-
-    Attributes:
-    -----------
-    None
-    """
-    # Apply the procided evaluation function to get the posteriors of all data points
-    posteriors = list(pool.map(posterior_evaluation, samples))
-    # Use the model's built-in scoring function to get the posteriors w.r.t. the model
-    proposal = model.score_samples(X = samples)
-    # Get the importance weights for all the data points via element-wise subtraction
-    importance_weights = posteriors - proposal
-    # Check whether the function is called to calculate and return the importance weights
-    if return_weights == True:
-        return importance_weights
-    if return_weights == False:
-        # Calculate the importance probabilities for the purpose of subsequent resampling
-        importance_probability = np.exp(importance_weights)
-        # Smoothe the importance probabilities with truncation to penalize dominant samples
-        smoothed_probability = weight_truncation(mixture_samples = mixture_samples,
-                                                 importance_probability = importance_probability,
-                                                 truncation_alpha = truncation_alpha)
-        # Calculate the importance probabilities for the purpose of subsequent resampling
-        importance_probability = np.divide(smoothed_probability, sum(smoothed_probability))
-        # Create a vector of index frequencies as weighted by the calculated probabilities
-        sampling_index = np.random.choice(a = samples.shape[0],
-                                          size = mixture_samples,
-                                          replace = True,
-                                          p = importance_probability)
-        # Build a set of data points in accordance with the created vector of frequencies
-        importance_samples = samples[sampling_index]
-        return importance_samples
-
-def weight_truncation(mixture_samples,
-                      importance_probability,
-                      truncation_alpha):
-    """Transform the handed probabilities to combat dominating data points
-
-    This function transforms provided probabilities via an implementation of truncated
-    importance sampling and re-normalizing the results. The transformation leads to a
-    downgrading of otherwise dominating high-probability samples for the re-sampling.
-
-    Parameters:
-    -----------
-    importance_probability : array-like
-        The one-dimensional array of importance probabilities that should be smoothed.
-
-    mixture_samples : int
-        The number of samples to be drawn from the model before each importance sampling.
-
-    truncation_alpha : float
-        The truncation value for importance probability re-weighting. This parameter must
-        be a float from the interval[1.0, 3.0]. A higher value leads to a looser fitting
-        with strong truncation, whereas a smaller value leads to a higher level of retaining
-        dominant data points as such. It is recommended to only alter this parameter if the
-        resulting posterior approximation is problematic and can't be otherwise resolved.
-
-    Returns:
-    --------
-    normalized_result : array-like
-        A transformed array of probabilities with slightly less pronounced inequalities.
-
-    Attributes:
-    -----------
-    None
-    """
-    # Compute the mean of the importance probabilities provided as input
-    mean_probability = np.mean(importance_probability)
-    # Create the necessary comparison term for truncated importance sampling
-    if truncation_alpha == 2.0:
-        comparison_term = np.multiply(np.sqrt(mixture_samples), mean_probability)
-    elif truncation_alpha == 3.0:
-        comparison_term = np.multiply(np.cbrt(mixture_samples), mean_probability)
-    else:
-        comparison_term = np.multiply(np.power(mixture_samples, (1 / truncation_alpha)),
-                                      mean_probability)
-    # Calculate the element-wise minimum comparison between the given terms
-    truncated_probability = np.minimum(importance_probability, comparison_term)
-    # Normalize the results to ensure their full usability as probabilities
-    normalized_result = np.divide(truncated_probability, np.sum(truncated_probability))
-    return normalized_result
-
-def mixture_fit(samples,
-                model_components,
-                model_covariance,
-                tolerance,
-                em_iterations,
-                parameter_init,
-                model_verbosity,
-                model_selection,
-                kde_bandwidth):
-    """Fit a variational Bayesian non-parametric Gaussian mixture model to samples.
-
-    This function takes the parameters described below to initialize and then fit a
-    model to a provided set of data points. It returns a Scikit-learn estimator object
-    that can then be used to generate samples from the distribution approximated by the
-    model and score the log-probabilities of data points based on the returned model.
-
-
-    Parameters:
-    -----------
-    samples : array-like
-        The set of provided data points that the function's model should be fitted to.
-
-    model_components : int, defaults to rounding up (2 / 3) * the number of dimensions
-        The maximum number of Gaussians to be fitted to data points in each iteration.
-
-    model_covariance : {'full', 'tied', 'diag', 'spherical'}
-        The type of covariance parameters the model should use for the fitting process.
-
-    tolerance : float
-        The model's convergence threshold at which the model's fit is deemed finalized.
-
-    em_iterations : int
-        The maximum number of expectation maximization iterations the model should run.
-
-    parameter_init :  {'kmeans', 'random'}
-        The method used to initialize the model's weights, the means and the covariances.
-
-    model_verbosity : {0, 1, 2}
-        The amount of information that the model fitting should provide during runtime.
-
-    model_selection : {'gmm', 'kde'}
-        The selection of the type of model that should be used for the fitting process,
-        i.e. either a variational Bayesian non-parametric GMM or kernel density estimation.
-
-    kde_bandwidth : float
-        The kernel bandwidth that should be used in the case of kernel density estimation.
-
-    Returns:
-    --------
-    model : sklearn estimator
-        A variational Bayesian non-parametric Gaussian mixture model fitted to samples.
-
-    Attributes:
-    -----------
-
-    fit(X) : Estimate a model's parameters with the expectation maximization algorithm.
-
-    sample(n_samples=1) : Generate a new set of random data points from fitted Gaussians.
-
-    score_samples(X) : Calculate the weighted log-probabilities for each data point.
-    """
-    # Check which type of model should be used for the iterative fitting process
-    if model_selection == 'gmm':
-        # Initialize a variational Bayesian non-parametric GMM for fitting
-        model = BGM(n_components = model_components,
-                    covariance_type = model_covariance,
-                    tol = tolerance,
-                    max_iter = em_iterations,
-                    init_params = parameter_init,
-                    verbose = model_verbosity,
-                    verbose_interval = 10,
-                    warm_start = False,
-                    random_state = 42,
-                    weight_concentration_prior_type = 'dirichlet_process')
-    if model_selection == 'kde':
-        model = KD(bandwidth = kde_bandwidth,
-                   kernel = 'gaussian',
-                   metric = 'euclidean',
-                   algorithm = 'auto',
-                   breadth_first = True,
-                   atol = 0.0,
-                   rtol = tolerance)
-    # Fit the previously initialized model to the provided data points
-    model.fit(np.asarray(samples))
-    return model
-
-def dynamical_tolerance(tolerance_range,
-                        gaussbock_iterations,
-                        step):
-    """Calculate the model's convergence threshold dynamically for the given iteration.
-
-    The variational Bayesian non-parametric Gaussian mixture model used in this code
-    requires a convergence threshold to terminate before reaching the maximum number
-    of model-fitting iterations. As the initial sample isn't a great fit for the true
-    posterior distribution, optimizing the fit to a very strict convergence threshold
-    isn't very sensible. Instead, the convergence threshold decreases linearly with
-    each full iteration, with the change from iteration to iteration being dependent
-    on the range that is provided by the user to allow customization to a problem.
-
-    Parameters:
-    -----------
-    tolerance_range : list
-        The two ends for the shrinking convergence threshold as a tuple [float, float].
-
-    gaussbock_iterations : int
-        The number of iterations that gaussbock should circle through to achieve a fit.
-
-    step : int
-        the index of the current iteration, i.e. a counter to keep track of progress.
-
-    Returns:
-    --------
-    step_tolerance : float
-        A desired convergence threshold for the given step's model-fitting process.
-
-    Attributes:
-    -----------
-    None
-    """
-    # Difference between the high and low end of the tolerance range
-    difference = tolerance_range[0] - tolerance_range[1]
-    # Increase by which the tolerance level is tightened at each step
-    increase = difference / (gaussbock_iterations - 1)
-    # Tolerance for the current iteration the function was called for
-    step_tolerance = tolerance_range[0] - (step * increase)
-    return step_tolerance
-
-def parameter_check(parameter_ranges,
-                    posterior_evaluation,
-                    output_samples,
-                    initial_samples,
-                    gaussbock_iterations,
-                    mixture_samples,
-                    em_iterations,
-                    tolerance_range,
-                    model_components,
-                    model_covariance,
-                    parameter_init,
-                    model_verbosity,
-                    mpi_parallelization,
-                    processes,
-                    weights_and_model,
-                    truncation_alpha,
-                    model_selection,
-                    kde_bandwidth):
-    """Check all parameters for conformance with the required parameter specifications.
-
-    Sometimes, users might provide parameters in formats or with values that aren't
-    expected and would, therefore, lead to a crash. In order to prevent waiting for the
-    code to reach such a breaking point, all parameters are checked in the beginning.
-    The code will terminate with a descriptive error message in case of discrepancies.
-
-    Parameters:
-    -----------
-    parameter_ranges : array-like
-        The allowed range for each parameter, signified by a lower and upper limit, with
-        one row per parameter, and lower and upper limits in the first and second column.
-
-    posterior_evaluation : function
-        The evaluation function that takes a single data point in the parameter space and
-        then returns the logarithmic posterior value for the specific given data point.
-
-    output_samples : int
-        The number of samples generated from the final model's posterior approximation.
-
-    initial_samples : {['automatic', int, int], ['custom', array-like]}
-        The specification whether 'emcee' should be used to generate the initial set of
-        data points, with the number of walkers and the number of chain steps specified,
-        or whether a custom pre-prepared set of data points should be used instead.
-
-    gaussbock_iterations : int
-        The number of iterations that gaussbock should circle through to achieve a fit.
-
-    mixture_samples : int
-        The number of samples to be drawn from the model before each importance sampling.
-
-    em_iterations : int
-        The maximum number of expectation maximization iterations the model should run.
-
-    tolerance_range : list
-        The two ends for the shrinking convergence threshold as a tuple [float, float].
-
-    model_components : int
-        The maximum number of Gaussians to be fitted to data points in each iteration.
-
-    model_covariance : {'full', 'tied', 'diag', 'spherical'}
-        The type of covariance parameters the model should use for the fitting process.
-
-    parameter_init :  {'kmeans', 'random'}
-        The method used to initialize the model's weights, the means and the covariances.
-
-    model_verbosity : {0, 1, 2}
-        The amount of information that the model fitting should provide during runtime.
-
-    mpi_parallelization : boolean
-        The boolean value indicating whether to parallelize the code via an MPIPool.
-
-    processes : int
-        The number of processes the code should invoke for its parallelizable parts.
-
-    truncation_alpha : float
-        The truncation value for importance probability re-weighting. This parameter must
-        be a float from the interval[1.0, 3.0]. A higher value leads to a looser fitting
-        with strong truncation, whereas a smaller value leads to a higher level of retaining
-        dominant data points as such. It is recommended to only alter this parameter if the
-        resulting posterior approximation is problematic and can't be otherwise resolved.
-
-    model_selection : {'gmm', 'kde'}
-        The selection of the type of model that should be used for the fitting process,
-        i.e. either a variational Bayesian non-parametric GMM or kernel density estimation.
-
-    kde_bandwidth : float
-        The kernel bandwidth that should be used in the case of kernel density estimation.
-
-    Returns:
-    --------
-    None
-
-    Attributes:
-    -----------
-    None
-    """
-    # Create a vector of boolean values to keep track of incorrect inputs
-    incorrect_inputs = np.zeros(19, dtype = bool)
-    # Check if the parameter 'parameter_ranges' satisfies the specifications
-    if not (type(parameter_ranges) == np.ndarray and parameter_ranges.shape[1] == 2
-            and np.all([parameter_ranges[i, 0] < parameter_ranges[i, 1]
-            for i in range(0, parameter_ranges.shape[1])])):
-        incorrect_inputs[0] = True
-    # Check if the parameter 'posterior_evaluation' is a suitable function
-    try:
-        # Extract the provided minimum and maximum allowed values for all of the parameters
-        low, high = parameter_ranges[:, 0], parameter_ranges[:, 1]
-        # Draw a random test data point for the function from the allowed parameter ranges
-        test_point = np.random.uniform(low = low, high = high)
-        try:
-            test_posterior = posterior_evaluation(test_point)
-        except:
-            incorrect_inputs[1] = True
-    except:
-        # Let the function resume, as a faulty 'parameter_ranges' will terminate
-        pass
-    # Check if the provided output parameter 'output_samples' is an integer
-    if not (type(output_samples) == int and output_samples > 0):
-        incorrect_inputs[2] = True
-    # Check if the parameter 'input_samples' is withing the allowed set
-    if not initial_samples[0] in ['automatic', 'custom']:
-        incorrect_inputs[3] = True
-    if initial_samples[0] == 'automatic' and (len(initial_samples) != 3
-        or [type(initial_samples[i]) for i in range(0,3)] != [str, int, int]):
-        incorrect_inputs[3] = True
-    elif initial_samples[0] == 'custom' and (len(initial_samples) != 2
-        or [type(initial_samples[i]) for i in range(0,2)] != [str, np.ndarray]):
-        incorrect_inputs[3] = True
-    # Check if the provided parameter 'gaussbock_iterations' is an integer
-    if not (type(gaussbock_iterations) == int and gaussbock_iterations > 0):
-        incorrect_inputs[4] = True
-    # Check if the parameter 'mixture_samples' for the model is an integer
-    if not (type(mixture_samples) == int and mixture_samples > 0):
-        incorrect_inputs[5] = True
-    # Check if the parameter 'em_iterations' for the model is an integer
-    if not (type(em_iterations) == int and em_iterations > 0):
-        incorrect_inputs[6] = True
-    # Check if the parameter 'tolerance_range' satisfies the specifications
-    if not (type(tolerance_range) == list and tolerance_range[0] > tolerance_range[1]):
-        incorrect_inputs[7] = True
-    # Check if the parameter 'model_components' for the model is an integer
-    if not ((type(model_components) == int and model_components > 0) or model_components == None):
-        incorrect_inputs[8] = True
-    # Check if the parameter 'model_covariance' is within the allowed set
-    if not model_covariance in ['full', 'tied', 'diag', 'spherical']:
-        incorrect_inputs[9] = True
-    # Check if the parameter 'parameter_init' is within the allowed set
-    if not parameter_init in ['kmeans', 'random']:
-        incorrect_inputs[10] = True
-    # Check if the parameter 'model_verbosity' is within the allowed set
-    if not model_verbosity in [0, 1, 2]:
-        incorrect_inputs[11] = True
-    # Check if the parameter 'mpi_parallelization' is within the allowed set
-    if not mpi_parallelization in [True, False]:
-        incorrect_inputs[12] = True
-    # Check if the parameter 'processes' for parallelization is an integer
-    if not (type(processes) == int and processes > 0):
-        incorrect_inputs[13] = True
-    # Check if the parameter 'weights_and_model' is within the allowed set
-    if not weights_and_model in [True, False]:
-        incorrect_inputs[14] = True
-    # Check whether the number of walkers is at least twice the parameter number
-    if (initial_samples[0] == 'automatic' and len(initial_samples) == 3
-        and [type(initial_samples[i]) for i in range(0,3)] == [str, int, int]):
-        try:
-            if not initial_samples[1] > (2 * len(parameter_ranges)):
-                incorrect_inputs[15] = True
-        except:
-            # Let the function resume, as a faulty 'parameter_ranges' will terminate
-            pass
-    # Check whether the truncation parameter falls within the allowed range
-    if not (type(truncation_alpha) == float and (0.0 <= truncation_alpha <= 3.0)):
-        incorrect_inputs[16] = True
-    # Check whether the model selection parameter is within the allowed set
-    if not model_selection in [None, 'gmm', 'kde']:
-        incorrect_inputs[17] = True
-    # Check whether the KDE bandwidth parameter is a positive float value
-    if not (type(kde_bandwidth) == float and kde_bandwidth > 0.0):
-        incorrect_inputs[18] = True
-    # Define error messages for each parameter in case of unsuitable inputs
-    errors = ['ERROR: parameter_ranges: 2-column numpy.ndarray, first column lower bounds',
-              'ERROR: posterior_evaluation: Must be a suitable function for this problem',
-              'ERROR: output_samples: Must be an integer above 0 to be a valid input',
-              'ERROR: initial_samples: ["automatic", int, int] or ["custom", array-like]',
-              'ERROR: gaussbock_iterations: Must be an integer above 0 to be a valid input',
-              'ERROR: mixture_samples: Must be an integer above 0 to be a valid input',
-              'ERROR: em_iterations: Must be an integer above zero to be a valid input',
-              'ERROR: tolerance_range: List of the form [float, float], first value higher',
-              'ERROR: model_components: Must be an integer above 0 to be a valid input',
-              'ERROR: model_covariance: Must be from {"full", "tied", "diag", "spherical"}',
-              'ERROR: parameter_init: Must be from {"kmeans", "random"} to be a valid input',
-              'ERROR: model_verbosity: Must be from {0, 1, 2} to select the information level',
-              'ERROR: mpi_parallelization: Must be from {True, False} to indicate MPI usage',
-              'ERROR: processes: Must be an integer above 0 to be a valid input',
-              'ERROR: weights_and_model: Must be from {True, False} to indicate the preference',
-              'ERROR: initial_samples: No. of walkers must be > twice the number of parameters',
-              'ERROR: truncation_alpha: Must be a float from [0.0, 3.0] to be a valid input',
-              'ERROR: model_selection: Must be from {"gmm", "kde"} to be a valid input',
-              'ERROR: kde_bandwidth: Must be a float above 0 to be a valid input']
-    # If there are any unsuitable inputs, print error messages and terminate
-    if any(value == True for value in incorrect_inputs):
-        for i in range(0, len(errors)):
-            if incorrect_inputs[i] == True:
-                print(errors[i])
-        sys.exit()
+def test():
+    ranges = np.array([[0.0, 1.], [0.0, 1.0]])
+    def posterior_evaluation(p):
+        L = -0.5*((p[0]-0.5)**2 + (p[1]-0.5)**2)/0.05**2
+        return L
+    output_samples=5000
+    G = Gaussbock(ranges, posterior_evaluation, output_samples)
+    start = ['automatic', 16, 100]
+    p, w, model = G.run(start)
+    w = np.exp(w-w.max())
+    # print(np.cov(p.T, aweights=w))
+    # import pylab
+    # print(p.shape)
+    # pylab.hist2d(p[:,0], p[:,1], weights=w, bins=30)
+    # pylab.show()
+    # pylab.hist2d(p[:,0], p[:,1],            bins=30)
+    # pylab.show()
