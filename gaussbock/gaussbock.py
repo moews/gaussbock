@@ -150,7 +150,7 @@ class Gaussbock:
                               pool=pool)
 
         # We should close the pool if we made it ourself and it is an MPI pool
-        self.should_close_pool = (pool is not None) and self.mpi_parallelization
+        self.should_close_pool = (pool is None) and (self.pool is not None) and self.mpi_parallelization
 
         self.parameter_number = self.parameter_ranges.shape[0]
 
@@ -331,8 +331,10 @@ class Gaussbock:
             print('----------------------------------------------\n')
             samples = self.iterate(i, samples)
 
+        return self.final_iteration(samples, weights_and_model=weights_and_model)
 
 
+    def final_iteration(self, samples, weights_and_model=True):
         # Fit the final model to the data points provided by the loop
         # We do one final iteration so we can potentially generate more samples here.
         print('PROCESS: Fitting the final model ...')
@@ -533,6 +535,10 @@ class Gaussbock:
         # Get the importance weights for all the data points via element-wise subtraction
         print("JAZ Need to do truncation here too")
         importance_weights = posteriors - proposal
+
+        # Make the max weight always unity, for numerical convenience
+        importance_weights -= importance_weights.max()
+        
         # Check whether the function is called to calculate and return the importance weights
         if return_weights:
             return importance_weights
@@ -605,8 +611,6 @@ class Gaussbock:
                        rtol = tolerance)
         # Fit the previously initialized model to the provided data points
         model.fit(np.asarray(samples))
-        print(model)
-        print(dir(model))
         return model
 
 
