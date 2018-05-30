@@ -127,7 +127,9 @@ def gaussbock(parameter_ranges,
               weights_and_model = False,
               truncation_alpha = 2.0,
               model_selection = None,
-              kde_bandwidth = 0.5):
+              kde_bandwidth = 0.5,
+              pool = None,
+              ):
     """Sample data points from a parameter space's approximated probability distribution.
 
     This is the primary function of 'gaussbock', allowing access to its functionality
@@ -203,6 +205,9 @@ def gaussbock(parameter_ranges,
     kde_bandwidth : float, defaults to 0.5
         The kernel bandwidth that should be used in the case of kernel density estimation.
 
+    pool : pool object, defaults to None
+        If set, use this pool rather than constructing one internally.
+
     Returns:
     --------
     samples : array-like or list
@@ -250,9 +255,10 @@ def gaussbock(parameter_ranges,
     if model_components == None:
         model_components = int(np.ceil((2 / 3) * parameter_number))
     # Establish the type of pool to be used for an eventual parallelization of the sampler
-    with pool_type(mpi_parallelization = mpi_parallelization, processes = processes) as pool:
+    input_pool = pool
+    with pool_type(mpi_parallelization = mpi_parallelization, processes = processes, pool=input_pool) as pool:
         # In case of using MPI, let worker processes wait for tasks from the master process
-        if mpi_parallelization == True:
+        if mpi_parallelization == True and (input_pool is None):
             if not pool.is_master():
                 pool.wait()
                 return
@@ -346,10 +352,8 @@ def gaussbock(parameter_ranges,
         print('PROCESS: Checking and preparing returns ...')
         print('-------------------------------------------\n')
         # Check whether to return the importance weights and the model
-        if weights_and_model == False:
-            print('NOTE: Successful termination; samples are being returned')
-            return samples
-        if weights_and_model == True:
+
+        if weights_and_model:
             # Get the importance weights for the final set of data points
             importance_weights = importance_sampling(samples = samples,
                                                      model = mixture_model,
@@ -361,10 +365,18 @@ def gaussbock(parameter_ranges,
                                                      pool = pool,
                                                      parameter_number = parameter_number,
                                                      truncation_alpha = truncation_alpha)
-        # Stop the pool at this point to avoid simply letting the process hang indefinitely
-        pool.close()
-        print('NOTE: Successful termination; samples, weights and model are being returned')
-        return [samples, importance_weights, mixture_model]
+            # Stop the pool at this point to avoid simply letting the process hang indefinitely
+            print('NOTE: Successful termination; samples, weights and model are being returned')
+            results = (samples, importance_weights, mixture_model)
+
+        else:
+            print('NOTE: Successful termination; samples are being returned')
+            results = samples
+
+        if input_pool is None:
+            pool.close()
+
+        return results
 
 def gaussbock_emcee(parameter_ranges,
                     emcee_walkers,
@@ -435,7 +447,8 @@ def gaussbock_emcee(parameter_ranges,
     return emcee_samples
 
 def pool_type(mpi_parallelization,
-              processes):
+              processes,
+              pool=None):
     """
     Establish which kind of pool should be used by the code for parallelization purposes.
 
@@ -457,6 +470,9 @@ def pool_type(mpi_parallelization,
     processes : int
         The number of processes the code should invoke for its parallelizable parts.
 
+    pool : pool-like object, optional
+        If set, use this object as the pool instead of creating a new one
+
     Returns:
     --------
     pool : {'mpi', 'multi', 'serial'}
@@ -466,6 +482,10 @@ def pool_type(mpi_parallelization,
     -----------
     None
     """
+
+    if pool is not None:
+        return pool
+
     # Check whether the utilization of an MPIPool is indicated via the input
     if mpi_parallelization == True:
         # If the use of an MPIPool is not enabled, print an error and terminate
