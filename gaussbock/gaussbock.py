@@ -279,7 +279,7 @@ class Gaussbock:
                   'ERROR: kde_bandwidth: Must be a float above 0 to be a valid input']
         # If there are any unsuitable inputs, print error messages and terminate
         if any(incorrect_inputs):
-          errs = []
+            errs = []
             for i in range(0, len(errors)):
                 if incorrect_inputs[i]:
                     print(errors[i])
