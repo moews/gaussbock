@@ -282,7 +282,6 @@ class Gaussbock:
             errs = []
             for i in range(0, len(errors)):
                 if incorrect_inputs[i]:
-                    print(errors[i])
                     errs.append(errors[i])
             raise ValueError("\n".join(errs))
 
@@ -538,7 +537,7 @@ class Gaussbock:
 
         # Make the max weight always unity, for numerical convenience
         importance_weights -= importance_weights.max()
-        
+
         # Check whether the function is called to calculate and return the importance weights
         if return_weights:
             return importance_weights
