@@ -324,6 +324,10 @@ class Gaussbock:
         samples: array
             Shape (nsample, ndim) array of posterior samples
 
+        blobs: list
+            Optional, only if returned by your posterior - any additional output
+            from the posterior
+
         importance_weights: optional, array
             weights for the samples, only if weights_and_model == True
 
@@ -361,6 +365,41 @@ class Gaussbock:
 
 
     def final_iteration(self, samples, weights_and_model=True):
+        """
+        Run the last iteration of the algorithm, which can return extra samples
+
+
+        Parameters
+        ----------
+
+        samples: array
+            Samples (nsample,ndim) from previous iteration
+        
+        weights_and_model: bool
+            Optional, default=True
+            Whether to return sample weights and fitted model instead of 
+            equally-weighted samples
+
+        Returns
+        -------
+
+        samples: array
+            Samples (nsample,ndim) from the model
+
+        importance_weights: array
+            Optional, only if weights_and_model=True
+            Weights for each sample
+
+        mixture_model: object
+            Optional, only if weights_and_model=True
+            Fitted Gaussian mixture model or Kernel Density Estimator
+
+        blobs: list
+            Optional, only if your posterior function returns additional output
+            List of tuples of the extra output from your posterior, from each function.
+
+
+        """
         # Fit the final model to the data points provided by the loop
         # We do one final iteration so we can potentially generate more samples here.
         print('PROCESS: Fitting the final model ...')
@@ -430,9 +469,6 @@ class Gaussbock:
         samples : array-like
             An initial set of distribution-approximating samples as chains of MCMC walkers.
 
-        Attributes:
-        -----------
-        None
         """
         # Extract the provided minimum and maximum allowed values for all of the parameters
         low, high = self.parameter_ranges[:, 0], self.parameter_ranges[:, 1]
@@ -464,11 +500,16 @@ class Gaussbock:
         samples: array
             Samples of shape (nsample, ndim) to start the iteration from
 
+
         Returns
         -------
 
         samples: array
             New array of samples of shape (nsample, ndim)
+
+        blobs: list
+            Optional, only if returned by your posterior function.
+            Additional outputs returned by your posterior corresponding to each sample
 
         """
         # Get the model-fitting tolerance level for the iteration
