@@ -417,9 +417,11 @@ class Gaussbock:
         samples = self.range_cutoff(samples)
 
         importance_weights, blobs = self.importance_sampling(samples, mixture_model, return_weights=True)
-
         # Extract the required amount of samples from the now clean set
         samples = samples[0:self.output_samples, :]
+        importance_weights = importance_weights[0:self.output_samples]
+
+
         if blobs is not None:
             blobs = blobs[0:self.output_samples]
         print('PROCESS: Checking and preparing returns ...')
@@ -532,9 +534,12 @@ class Gaussbock:
         # Generate a new set of equally weighted samples
         print('PROCESS: Importance sampling for re-weighted frequencies ...')
         print('------------------------------------------------------------\n')
-        samples = self.importance_sampling(samples,mixture_model, return_weights=False)
-        print('===> DONE\n')
-        return samples
+        samples, blobs = self.importance_sampling(samples,mixture_model, return_weights=False)
+
+        if blobs is None:
+            return samples
+        else:
+            return samples, blobs
 
 
     def range_cutoff(self, samples):
@@ -666,6 +671,7 @@ class Gaussbock:
             importance_samples = samples[sampling_index]
             if blobs is not None:
                 blobs = [blobs[i] for i in sampling_index]
+
             return importance_samples, blobs
 
 
