@@ -329,6 +329,11 @@ class Gaussbock:
             print('PROCESS: Fitting the model for iteration %d ...' % i)
             print('----------------------------------------------\n')
             samples = self.iterate(i, samples)
+            # Check for blobs
+            # In this mode of running we don't need intermediate results
+            # so we just discard them.
+            if isinstance(samples, tuple):
+                samples, _ = samples
 
         return self.final_iteration(samples, weights_and_model=weights_and_model)
 
@@ -350,21 +355,29 @@ class Gaussbock:
         # Cut all the data points falling outside of the allowed ranges
         samples = self.range_cutoff(samples)
 
-        importance_weights = self.importance_sampling(samples, mixture_model, return_weights=True)
+        importance_weights, blobs = self.importance_sampling(samples, mixture_model, return_weights=True)
 
         # Extract the required amount of samples from the now clean set
         samples = samples[0:self.output_samples, :]
+        if blobs is not None:
+            blobs = blobs[0:self.output_samples]
         print('PROCESS: Checking and preparing returns ...')
         print('-------------------------------------------\n')
         # Check whether to return the importance weights and the model
 
         if weights_and_model:
             print('NOTE: Successful termination; samples, weights and model are being returned')
-            results = (samples, importance_weights, mixture_model)
+            if blobs is None:
+                results = (samples, importance_weights, mixture_model)
+            else:
+                results = (samples, importance_weights, mixture_model, blobs)
 
         else:
             print('NOTE: Successful termination; samples are being returned')
-            results = samples
+            if blobs is None:
+                results = samples
+            else:
+                results = samples, blobs
 
         if self.should_close_pool:
             self.pool.close()
@@ -523,12 +536,26 @@ class Gaussbock:
         samples : array-like
             A set of data points re-sampled due to frequencies based on importance weights.
 
+        blobs : list or None
+            Additional objects returned by the posterior_evaluation function
+
         Attributes:
         -----------
         None
         """
         # Apply the procided evaluation function to get the posteriors of all data points
-        posteriors = list(self.pool.map(self.posterior_evaluation, samples))
+        results = list(self.pool.map(self.posterior_evaluation, samples))
+
+        # Based on the emcee example we allow the posterior function to return
+        # arbitrary additional data, blobs, to allow for derived parameters.
+        try:
+            posteriors = np.array([float(l[0]) for l in results])
+            blobs = [l[1:] for l in results]
+        except (IndexError, TypeError):
+            posteriors = np.array([float(l) for l in results])
+            blobs = None
+
+
         # Use the model's built-in scoring function to get the posteriors w.r.t. the model
         proposal = model.score_samples(X = samples)
         # Get the importance weights for all the data points via element-wise subtraction
@@ -540,7 +567,7 @@ class Gaussbock:
 
         # Check whether the function is called to calculate and return the importance weights
         if return_weights:
-            return importance_weights
+            return importance_weights, blobs
         else:
             # Calculate the importance probabilities for the purpose of subsequent resampling
             importance_probability = np.exp(importance_weights)
@@ -555,7 +582,9 @@ class Gaussbock:
                                               p = importance_probability)
             # Build a set of data points in accordance with the created vector of frequencies
             importance_samples = samples[sampling_index]
-            return importance_samples
+            if blobs is not None:
+                blobs = [blobs[i] for i in sampling_index]
+            return importance_samples, blobs
 
 
     def mixture_fit(self, samples, tolerance):
@@ -726,20 +755,22 @@ def pool_type(mpi_parallelization,
 def test():
     ranges = np.array([[0.0, 1.], [0.0, 1.0]])
     def posterior_evaluation(p):
-        L = -0.5*((p[0]-0.5)**2 + (p[1]-0.5)**2)/0.05**2
-        return L
+        chi2 = ((p[0]-0.5)**2 + (p[1]-0.5)**2)/0.05**2
+        L = -0.5*chi2
+        return L, chi2  
     output_samples=5000
     G = Gaussbock(ranges, posterior_evaluation, output_samples)
     start = ['automatic', 16, 100]
-    p, w, model = G.run(start)
+    p, w, model, blobs = G.run(start)
+    chi2 = [b[0] for b in blobs]
     w = np.exp(w-w.max())
-    # print(np.cov(p.T, aweights=w))
-    # import pylab
-    # print(p.shape)
-    # pylab.hist2d(p[:,0], p[:,1], weights=w, bins=30)
-    # pylab.show()
-    # pylab.hist2d(p[:,0], p[:,1],            bins=30)
-    # pylab.show()
+    import pylab
+    pylab.figure()
+    pylab.subplot(1,2,1)
+    pylab.hist2d(p[:,0], p[:,1], weights=w, bins=30)
+    pylab.subplot(1,2,2)
+    pylab.hist(chi2, bins=30, weights=w)
+    pylab.show()
 
 
 if __name__ == '__main__':
