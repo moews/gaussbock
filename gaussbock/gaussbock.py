@@ -308,6 +308,28 @@ class Gaussbock:
     def run(self, initial_samples, weights_and_model=True):
         """
         Run the complete sampling process
+
+        Parameters
+        ----------
+
+        initial_samples: list
+            Either ['automatic', number_walkers, samples_per_walker] to initialize using emcee
+            or ['custom', initial_samples] to start using custom points
+        weights_and_model: bool
+            Defaults to True. Whether to return just an equally-weighted sample or
+            a set of weights and the approximate mixture model/KDE that made them.
+
+        Returns
+        -------
+        samples: array
+            Shape (nsample, ndim) array of posterior samples
+
+        importance_weights: optional, array
+            weights for the samples, only if weights_and_model == True
+
+        mixture_model: optional, object
+            Gaussian mixture model or fitted Kernel Density Estimate, only if weights_and_model == True
+
         """
         # Test all parameters for validity and terminate if not true
         self.initial_samples = initial_samples
@@ -417,6 +439,25 @@ class Gaussbock:
         return emcee_samples
 
     def iterate(self, i, samples):
+        """
+        Run a single iteration, numbered i, of the algorithm, starting from the given samples.
+
+        Parameters
+        ----------
+
+        i: int
+            Index of the iteration, used to choose the tolerance criterion
+
+        samples: array
+            Samples of shape (nsample, ndim) to start the iteration from
+
+        Returns
+        -------
+
+        samples: array
+            New array of samples of shape (nsample, ndim)
+
+        """
         # Get the model-fitting tolerance level for the iteration
         step_tolerance = self.dynamical_tolerance(i)
         # Fit the model for the current data points and tolerance
