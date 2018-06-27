@@ -1,4 +1,2 @@
-# gaussbock
-Fast cosmological parameter estimation with parallel-iterative Bayesian nonparametrics
-
-The paper on arXiv and a documentation will follow shortly.
+# SCADDA
+Spatio-temporal cluster analysis with density-based distance augmentation
