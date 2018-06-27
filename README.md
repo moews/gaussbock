@@ -1,4 +1,4 @@
-# gaussbock
+# Gaussbock
 
 <img src="/logo.png" alt="logo" width="200px"/>
 
