@@ -1,6 +1,6 @@
 # gaussbock
 
-<img src="/logo.jpg" alt="logo" width="200px"/>
+<img src="/logo.png" alt="logo" width="200px"/>
 
 Fast cosmological parameter estimation with parallel iterative Bayesian nonparametrics
  
