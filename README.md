@@ -1,2 +1,4 @@
-# SCADDA
-Spatio-temporal cluster analysis with density-based distance augmentation
+#gaussbock
+Fast cosmological parameter estimation with parallel-iterative Bayesian nonparametrics
+
+(The paper on arXiv will follow shortly)
