@@ -4,4 +4,4 @@
 
 <img src="/logo.png" alt="logo" width="200px"/>
 
- The paper on arXiv and a documentation will follow shortly.
+ (The paper on arXiv and a documentation will follow shortly.)
