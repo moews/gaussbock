@@ -35,10 +35,10 @@ Alternatively, the file `gaussbock.py` can be downloaded from the folder `gaussb
 | model_covariance (optional)      | Type of covariance for the GMM fitting process  | 'full'      |
 | parameter_init (optional)        | How to intialize model weights, means and covariances  | 'random'      |
 | model_verbosity (optional)       | The amount of information printed during runtime  | 1      |
-| mpi_parallelization (optional)   | Indicator whether to parallelize using an MPI pool  | False      |
+| mpi_parallelization (optional)   | Whether to parallelize Gaussbock using an MPI pool  | False      |
 | processes (optional)             | Number of processes Gaussbock should parallelize over  | 1      |
-| weights_and_model (optional)     | Whether measurements should be on a log-scale   | False      |
-| truncation_alpha (optional)      | Whether measurements should be on a log-scale   | 2.0      |
+| weights_and_model (optional)     | Whether to return importance weights and the model  | False      |
+| truncation_alpha (optional)      | Truncation value for importance probability re-weighting  | 2.0      |
 | model_selection (optional)       | Whether measurements should be on a log-scale   | None      |
 | kde_bandwidth (optional)         | Whether measurements should be on a log-scale   | 0.5      |
 
