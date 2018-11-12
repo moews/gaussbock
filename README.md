@@ -21,25 +21,25 @@ Alternatively, the file `gaussbock.py` can be downloaded from the folder `gaussb
 
 <br></br>
 
-| Variables                        | Explanations                                       | Default                  |
-|:---------------------------------|:---------------------------------------------------|:-------------------------|
-| parameter_ranges                 | The lower and upper limit for each parameter       |                          |
-| posterior_evaluation             | Evaluation function handle for the posterior   |                          |
-| output_samples                   | Number of posterior samples that are required  |                          |
-| initial_samples (optional)       | Choice of 'emcee' or a provided start sample   | ['automatic', 50, 1000]  |
-| gaussbock_iterations (optional)  | Maximum number of Gaussbock iterations         | 10                       |
-| mixture_samples (optional)       | Number of samples drawn for importance sampling | 1e5  |
-| em_iterations (optional)         | Maximum number of EM iterations for the mixture model  | False      |
-| tolerance_range (optional)       | The range for the shrinking convergence threshold  | [1e-2, 1e-7] |
-| model_components (optional)      | Maximum number of Gaussians fitted to samples   | ⌈(2 / 3) * N⌉  |
-| model_covariance (optional)      | Type of covariance for the GMM fitting process  | 'full'      |
-| parameter_init (optional)        | How to intialize model weights, means and covariances  | 'random'      |
-| model_verbosity (optional)       | The amount of information printed during runtime  | 1      |
-| mpi_parallelization (optional)   | Whether to parallelize Gaussbock using an MPI pool  | False      |
-| processes (optional)             | Number of processes Gaussbock should parallelize over  | 1      |
-| weights_and_model (optional)     | Whether to return importance weights and the model  | False      |
-| truncation_alpha (optional)      | Truncation value for importance probability re-weighting  | 2.0      |
-| model_selection (optional)       | Whether measurements should be on a log-scale   | None      |
-| kde_bandwidth (optional)         | Whether measurements should be on a log-scale   | 0.5      |
+| Variables                        | Explanations                                              | Default                  |
+|:---------------------------------|:----------------------------------------------------------|:-------------------------|
+| parameter_ranges                 | The lower and upper limit for each parameter              |                          |
+| posterior_evaluation             | Evaluation function handle for the posterior              |                          |
+| output_samples                   | Number of posterior samples that are required             |                          |
+| initial_samples (optional)       | Choice of 'emcee' or a provided start sample              | ['automatic', 50, 1000]  |
+| gaussbock_iterations (optional)  | Maximum number of Gaussbock iterations                    | 10                       |
+| mixture_samples (optional)       | Number of samples drawn for importance sampling           | 1e5                      |
+| em_iterations (optional)         | Maximum number of EM iterations for the mixture model     | False                    |
+| tolerance_range (optional)       | The range for the shrinking convergence threshold         | [1e-2, 1e-7]             |
+| model_components (optional)      | Maximum number of Gaussians fitted to samples             | ⌈(2 / 3) * N⌉            |
+| model_covariance (optional)      | Type of covariance for the GMM fitting process            | 'full'                   |
+| parameter_init (optional)        | How to intialize model weights, means and covariances     | 'random'                 |
+| model_verbosity (optional)       | The amount of information printed during runtime          | 1                        |
+| mpi_parallelization (optional)   | Whether to parallelize Gaussbock using an MPI pool        | False                    |
+| processes (optional)             | Number of processes Gaussbock should parallelize over     | 1                        |
+| weights_and_model (optional)     | Whether to return importance weights and the model        | False                    |
+| truncation_alpha (optional)      | Truncation value for importance probability re-weighting  | 2.0                      |
+| model_selection (optional)       | Type of model used for the fitting process                | None                     |
+| kde_bandwidth (optional)         | Kernel bandwidth used when fitting via KDE                | 0.5                      |
 
 <br></br>
