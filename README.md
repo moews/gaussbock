@@ -32,8 +32,8 @@ Alternatively, the file `gaussbock.py` can be downloaded from the folder `gaussb
 | em_iterations (optional)         | Maximum number of EM iterations for the mixture model  | False      |
 | tolerance_range (optional)       | The range for the shrinking convergence threshold  | [1e-2, 1e-7] |
 | model_components (optional)      | Maximum number of Gaussians fitted to samples   | ⌈(2 / 3) * N⌉  |
-| model_covariance (optional)      | Whether measurements should be on a log-scale   | False      |
-| parameter_init (optional)        | Whether measurements should be on a log-scale   | False      |
+| model_covariance (optional)      | Type of covariance for the GMM fitting process  | False      |
+| parameter_init (optional)        | Method for initializing model weights, means and covariances   | False      |
 | model_verbosity (optional)       | Whether measurements should be on a log-scale   | False      |
 | mpi_parallelization (optional)   | Whether measurements should be on a log-scale   | False      |
 | processes (optional)             | Whether measurements should be on a log-scale   | False      |
