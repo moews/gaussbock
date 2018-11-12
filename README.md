@@ -24,11 +24,11 @@ Alternatively, the file `gaussbock.py` can be downloaded from the folder `gaussb
 | Variables                        | Explanations                                       | Default                  |
 |:---------------------------------|:---------------------------------------------------|:-------------------------|
 | parameter_ranges                 | The lower and upper limit for each parameter       |                          |
-| posterior_evaluation             | The evaluation function handle for the posterior   |                          |
-| output_samples                   | The number of posterior samples that are required  |                          |
-| initial_samples (optional)       | The choice of 'emcee' or a provided start sample   | ['automatic', 50, 1000]  |
-| gaussbock_iterations (optional)  | The maximum number of Gaussbock iterations         | 10                       |
-| mixture_samples (optional)       | The number of samples drawn for importance sampling | 1e5  |
+| posterior_evaluation             | Evaluation function handle for the posterior   |                          |
+| output_samples                   | Number of posterior samples that are required  |                          |
+| initial_samples (optional)       | Choice of 'emcee' or a provided start sample   | ['automatic', 50, 1000]  |
+| gaussbock_iterations (optional)  | Maximum number of Gaussbock iterations         | 10                       |
+| mixture_samples (optional)       | Number of samples drawn for importance sampling | 1e5  |
 | em_iterations (optional)         | The maximum number of EM iterations the GMM should run   | False      |
 | tolerance_range (optional)       | The range for the shrinking convergence threshold  | [1e-2, 1e-7] |
 | model_components (optional)      | The maximum number of Gaussians to be fitted to samples   | roundup((2 / 3) * no. of dimensions)      |
