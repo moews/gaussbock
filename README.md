@@ -22,7 +22,7 @@ Alternatively, the file `gaussbock.py` can be downloaded from the folder `gaussb
 
 ### Quickstart guide
 
-The required and optional inputs are listed below, with _D_ denoting the dimensionality of the parameter estimation problem (the number of parameters).
+Only three inputs are required by Gaussbock: The list of parameter ranges, each as a tuple with the lower and upper limit for each parameter (`parameter_ranges`), the handle for a posterior function to evaluate samples (`posterior_evaluation`), and the required number of posterior samples in the output (`output_samples`). The required and optional inputs are listed below, with _D_ denoting the dimensionality of the parameter estimation problem (the number of parameters).
 
 
 <br></br>
