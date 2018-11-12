@@ -28,7 +28,7 @@ A vaiety of optional inputs can bet set. An affine-invariate MCMC ensemble to ob
 
 In addition, the start and end for a shrinking convergence threshold for the posterior fitting in the form `[float, float]` can be provided (`tolerance_range`), as can the maximum number of Gaussians to be fitted to samples in each iteration (`model_components`) and the tpe of covariance parameters from the set `{'full', 'tied', 'diag', spherical'}` used for the fitting process (`model_covariance`). Another optional input is the method used to initialize the model's weights, means and covariances as either `'kmeans'` or `'random'` as possible values (`parameter_init`). The armount of information the model fitting should provide during runtime can be set as `0`, `1` or `2` (`model_verbosity`).
 
-For parallelization, the user can either choose to use MPI pools and set the corresponding input to `True` (`mpi_parallelization`), for example for running on supercomputers or local clusters, or specify a number of processes for multi-core parallelization (`processes`).
+In order to make full use of parallelization, the user can either choose to use MPI pools and set the corresponding input to `True` (`mpi_parallelization`), for example for running on supercomputers or local clusters, or specify a number of processes for multi-core parallelization (`processes`).
 
 The required and optional inputs are listed below, with _D_ denoting the dimensionality of the parameter estimation problem, or the number of parameters.
 
