@@ -18,3 +18,28 @@ Alternatively, the file `gaussbock.py` can be downloaded from the folder `gaussb
 
 ### Quickstart guide
 
+
+<br></br>
+
+| Variables                        | Explanations                                       | Default    |
+|:---------------------------------|:---------------------------------------------------|:-----------|
+| parameter_ranges                 | The lower and upper limit for each parameter       |            |
+| posterior_evaluation             | The evaluation function handle for the posterior   |            |
+| output_samples                   | The number of posterior samples that are required  |            |
+| initial_samples (optional)       | The choice between 'emcee' and a provided start sample  | ['automatic', 50, 1000]  |
+| gaussbock_iterations (optional)  | The maximum number of iterations Gaussbock should run     | 10           |
+| mixture_samples (optional)       | The number of model-drawn samples for importance sampling  | 1e5  |
+| em_iterations (optional)         | The maximum number of EM iterations the GMM should run   | False      |
+| tolerance_range (optional)       | The range for the shrinking convergence threshold  | [1e-2, 1e-7] |
+| model_components (optional)      | The maximum number of Gaussians to be fitted to samples   | roundup((2 / 3) * no. of dimensions)      |
+| model_covariance (optional)      | Whether measurements should be on a log-scale   | False      |
+| parameter_init (optional)        | Whether measurements should be on a log-scale   | False      |
+| model_verbosity (optional)       | Whether measurements should be on a log-scale   | False      |
+| mpi_parallelization (optional)   | Whether measurements should be on a log-scale   | False      |
+| processes (optional)             | Whether measurements should be on a log-scale   | False      |
+| weights_and_model (optional)     | Whether measurements should be on a log-scale   | False      |
+| truncation_alpha (optional)      | Whether measurements should be on a log-scale   | False      |
+| model_selection (optional)       | Whether measurements should be on a log-scale   | False      |
+| kde_bandwidth (optional)         | Whether measurements should be on a log-scale   | False      |
+
+<br></br>
