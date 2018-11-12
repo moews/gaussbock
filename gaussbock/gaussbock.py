@@ -168,7 +168,7 @@ def gaussbock(parameter_ranges,
     tolerance_range : list, defaults to [1e-2, 1e-7]
         The two ends for the shrinking convergence threshold as a tuple [float, float].
 
-    model_components : int, defaults to rounding up (2 / 3) * the number of dimenzsions
+    model_components : int, defaults to rounding up (2 / 3) * the number of dimensions
         The maximum number of Gaussians to be fitted to data points in each iteration.
 
     model_covariance : {'full', 'tied', 'diag', 'spherical'}, defaults to 'full'
