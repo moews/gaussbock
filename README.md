@@ -59,4 +59,4 @@ samples, weights, model = output
                    
 ```
 
-Note that, in the above example, we use two of the optional parameters to tell the tool to parallelize using MPI, for example for the use on a supercomputer, and to return the importance weights and the model, for example for weighting the returned samples and saving the model to draw further samples later. If we don't set 'weights_and_model' to 'True', the output of the function will be simply the list of samples.
+Note that, in the above example, we use two of the optional parameters to tell the tool to parallelize using MPI, for example for the use on a supercomputer, and to return the importance weights and the model, for example for weighting the returned samples and saving the model to draw further samples later. If we wouldn't set the weights and model return indicator to `True`, the output would be just the list of samples.
