@@ -51,7 +51,7 @@ from gaussbock import gaussbock
 
 output = gaussbock(parameter_ranges = your_posterior_ranges,
                    posterior_evaluation = your_posterior_function,
-                   output_samples, = your_required_samples,
+                   output_samples = your_required_samples,
                    mpi_parallelization = True,
                    weights_and_model = True)
 
@@ -59,4 +59,4 @@ samples, weights, model = output
                    
 ```
 
-Note that, in the above example, we used two of the optional parameters to tell the tool to parallelize using MPI, for example for the use on a supercomputer, and to return the importance weights and the model, for example for weighting the returned samples and saving the model to draw further samples later.
+Note that, in the above example, we use two of the optional parameters to tell the tool to parallelize using MPI, for example for the use on a supercomputer, and to return the importance weights and the model, for example for weighting the returned samples and saving the model to draw further samples later.
