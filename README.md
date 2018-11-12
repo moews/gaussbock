@@ -29,9 +29,9 @@ Alternatively, the file `gaussbock.py` can be downloaded from the folder `gaussb
 | initial_samples (optional)       | Choice of 'emcee' or a provided start sample   | ['automatic', 50, 1000]  |
 | gaussbock_iterations (optional)  | Maximum number of Gaussbock iterations         | 10                       |
 | mixture_samples (optional)       | Number of samples drawn for importance sampling | 1e5  |
-| em_iterations (optional)         | The maximum number of EM iterations the GMM should run   | False      |
+| em_iterations (optional)         | Maximum number of EM iterations for the mixture model  | False      |
 | tolerance_range (optional)       | The range for the shrinking convergence threshold  | [1e-2, 1e-7] |
-| model_components (optional)      | The maximum number of Gaussians to be fitted to samples   | roundup((2 / 3) * N  |
+| model_components (optional)      | The maximum number of Gaussians to be fitted to samples   | ⌈(2 / 3) * N⌉  |
 | model_covariance (optional)      | Whether measurements should be on a log-scale   | False      |
 | parameter_init (optional)        | Whether measurements should be on a log-scale   | False      |
 | model_verbosity (optional)       | Whether measurements should be on a log-scale   | False      |
