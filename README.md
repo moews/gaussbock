@@ -18,7 +18,7 @@ Alternatively, the file `gaussbock.py` can be downloaded from the folder `gaussb
 
 ### Quickstart guide
 
-The required and optional parameters are listed below, with _D_ denoting the number of parameters.
+The required and optional inputs are listed below, with _D_ denoting the dimensionality of the parameter estimation problem (the number of parameters).
 
 
 <br></br>
