@@ -18,6 +18,8 @@ Alternatively, the file `gaussbock.py` can be downloaded from the folder `gaussb
 
 ### Quickstart guide
 
+The required and optional parameters are listed below, with _D_ denoting the number of parameters.
+
 
 <br></br>
 
@@ -31,7 +33,7 @@ Alternatively, the file `gaussbock.py` can be downloaded from the folder `gaussb
 | mixture_samples (optional)       | Number of samples drawn for importance sampling           | 1e5                      |
 | em_iterations (optional)         | Maximum number of EM iterations for the mixture model     | False                    |
 | tolerance_range (optional)       | The range for the shrinking convergence threshold         | [1e-2, 1e-7]             |
-| model_components (optional)      | Maximum number of Gaussians fitted to samples             | ceiling((2 / 3) * N)            |
+| model_components (optional)      | Maximum number of Gaussians fitted to samples             | ceiling((2 / 3) * _D_)            |
 | model_covariance (optional)      | Type of covariance for the GMM fitting process            | 'full'                   |
 | parameter_init (optional)        | How to intialize model weights, means and covariances     | 'random'                 |
 | model_verbosity (optional)       | The amount of information printed during runtime          | 1                        |
