@@ -129,6 +129,7 @@ def gaussbock(parameter_ranges,
               weights_and_model = False,
               truncation_alpha = 2.0,
               model_selection = None,
+              normalize = True,
               kde_bandwidth = 0.5):
     """Sample data points from a parameter space's approximated probability distribution.
 
@@ -208,6 +209,10 @@ def gaussbock(parameter_ranges,
     kde_bandwidth : float, defaults to 0.5
         The kernel bandwidth that should be used in the case of kernel density estimation.
 
+    normalize : bool, defaults to True
+        Normalize all parameters to the range [0,1] during the fitting process
+        (the results will be denormalized afterwards)
+
     Returns:
     --------
     samples : array-like or list
@@ -273,7 +278,20 @@ def gaussbock(parameter_ranges,
     # Assign a reasonable default value to be used as the maximal number of models to fit
     if model_components == None:
         model_components = int(np.ceil((2 / 3) * parameter_number))
-        #model_components = 50
+
+    # By default we apply a normalization to all the parameters
+    # so that they vary from 0..1
+    # Replace the posterior with a wrapped version that does this.
+    if normalize:
+        def normalized_posterior(x):
+            p = denormalize_parameters(x, parameter_ranges)
+            return posterior_evaluation(p)
+        normalized_ranges = np.array([(0.,1.) for i in range(parameter_number)])
+    else:
+        normalized_posterior = posterior_evaluation
+        normalized_ranges = parameter_ranges
+
+
     # Establish the type of pool to be used for an eventual parallelization of the sampler
     with pool_type(mpi_parallelization = mpi_parallelization, processes = processes) as pool:
         # In case of using MPI, let worker processes wait for tasks from the master process
@@ -288,17 +306,17 @@ def gaussbock(parameter_ranges,
             # Call the emcee-based function to get a set of MCMC samples
             print('PROCESS: Getting initial samples via an affine-invariant MCMC ensemble ...')
             print('--------------------------------------------------------------------------\n')
-            samples = gaussbock_emcee(parameter_ranges = parameter_ranges,
+            samples = gaussbock_emcee(parameter_ranges = normalized_ranges,
                                       emcee_walkers = emcee_walkers,
                                       emcee_steps = emcee_steps,
-                                      posterior_evaluation = posterior_evaluation,
+                                      posterior_evaluation = normalized_posterior,
                                       mpi_parallelization = mpi_parallelization,
                                       processes = processes,
                                       pool = pool)
             print('===> DONE\n')
         elif initial_samples[0] == 'custom':
-            print('NOTE: Using the user-provided set of initial samples\n')
-            samples = initial_samples[1]
+            print('NOTE: Using (and normalizing) the user-provided set of initial samples\n')
+            samples = np.array([normalize_parameters(p) for p in initial_samples[1]])
 
         print('NOTE: Starting gaussbock iterations\n')
         # Loop over the provided number of iterations minus the last one
@@ -334,9 +352,8 @@ def gaussbock(parameter_ranges,
                 samples = mixture_model.sample(n_samples = int(np.round(output_samples * 1.5)))
             # Cut all of the data points outside of the allowed ranges
             print('NO. of samples pre-cut: %d\n' % len(samples))
-            np.savetxt('pre_cut_samples.txt', samples)
             samples = range_cutoff(samples = samples,
-                                   parameter_ranges = parameter_ranges)
+                                   parameter_ranges = normalized_ranges)
             print('NO. of samples post-cut: %d\n' % len(samples))
             # Extract the required amount of samples from the now clean set
             samples = samples[0:output_samples, :]
@@ -346,7 +363,7 @@ def gaussbock(parameter_ranges,
             samples, weights = importance_sampling(samples = samples,
                                                    model = mixture_model,
                                                    mixture_samples = mixture_samples,
-                                                   posterior_evaluation = posterior_evaluation,
+                                                   posterior_evaluation = normalized_posterior,
                                                    mpi_parallelization = mpi_parallelization,
                                                    processes = processes,
                                                    return_weights = False,
@@ -385,7 +402,7 @@ def gaussbock(parameter_ranges,
             samples = mixture_model.sample(n_samples = int(np.round(output_samples * 1.5)))
         # Cut all the data points falling outside of the allowed ranges
         samples = range_cutoff(samples = samples,
-                               parameter_ranges = parameter_ranges)
+                               parameter_ranges = normalized_ranges)
         # Extract the required amount of samples from the now clean set
         samples = samples[0:output_samples, :]
         print('PROCESS: Checking and preparing returns ...')
@@ -393,13 +410,14 @@ def gaussbock(parameter_ranges,
         # Check whether to return the importance weights and the model
         if weights_and_model == False:
             print('NOTE: Successful termination; samples are being returned')
+            samples = np.array([denormalize_parameters(p, parameter_ranges) for p in samples])
             return samples
         if weights_and_model == True:
             # Get the importance weights for the final set of data points
             importance_weights = importance_sampling(samples = samples,
                                                      model = mixture_model,
                                                      mixture_samples = mixture_samples,
-                                                     posterior_evaluation = posterior_evaluation,
+                                                     posterior_evaluation = normalized_posterior,
                                                      mpi_parallelization = mpi_parallelization,
                                                      processes = processes,
                                                      return_weights = True,
@@ -408,6 +426,7 @@ def gaussbock(parameter_ranges,
                                                      truncation_alpha = truncation_alpha)
         # Stop the pool at this point to avoid simply letting the process hang indefinitely
         pool.close()
+        samples = np.array([denormalize_parameters(p, parameter_ranges) for p in samples])
         print('NOTE: Successful termination; samples, weights and model are being returned')
         return [samples, importance_weights, mixture_model]
 
@@ -1054,3 +1073,10 @@ def parameter_check(parameter_ranges,
             if incorrect_inputs[i] == True:
                 print(errors[i])
         sys.exit()
+
+def normalize_parameters(x, ranges):
+    return np.array([(x-xmin)/(xmax-xmin) for (x,(xmin,xmax)) in zip(x, ranges)])
+
+def denormalize_parameters(x, ranges):
+    return np.array([x*(xmax-xmin)+xmin for (x,(xmin,xmax)) in zip(x, ranges)])
+
