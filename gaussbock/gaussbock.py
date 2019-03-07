@@ -609,7 +609,8 @@ class Gaussbock(object):
         # Create a sampler with the number of walkers, dimensions and evaluation function
         emcee_sampler = ec.EnsembleSampler(nwalkers = emcee_walkers,
                                            dim = parameter_number,
-                                           lnpostfn = self.posterior_evaluation
+                                           lnpostfn = self.posterior_evaluation,
+                                           pool = self.pool
                                            )
         # Run the sampler with the generated starting points and a step number per walker
         emcee_sampler.run_mcmc(pos0 = starting_points,
