@@ -326,12 +326,12 @@ class Gaussbock(object):
         # Generate a new set of weighted and resampled data points
         print('PROCESS: Importance sampling for re-weighted frequencies ...')
         print('------------------------------------------------------------\n')
-        weights = self.importance_sampling(samples = samples,
+        posts, weights, derived = self.importance_sampling(samples = samples,
                                            model = mixture_model,
                                            )
         print('\n===> DONE\n')
 
-        return samples, weights
+        return samples, weights, derived
 
     def final_iteration(self, samples, weights, output_samples, weights_and_model):
         # DOC
@@ -366,11 +366,14 @@ class Gaussbock(object):
 
         elif weights_and_model == True:
             # Get the importance weights for the final set of data points
-            importance_weights = self.importance_sampling(samples = samples,
+            posts, weights, derived = self.importance_sampling(samples = samples,
                                                      model = mixture_model,
                                                      )
             print('NOTE: Successful termination; samples, weights and model are being returned')
-            return samples, importance_weights, mixture_model
+            if derived is None:
+                return samples, posts, weights, mixture_model
+            else:
+                return samples, posts, weights, derived, mixture_model
 
     def has_converged(self, weights, previous_weights):
         if not self.convergence_check:
@@ -415,7 +418,7 @@ class Gaussbock(object):
             if i>0:
                 previous_weights = weights
 
-            samples, weights = self.next_iteration(samples, weights, i)
+            samples, weights, derived = self.next_iteration(samples, weights, i)
 
             if i>0 and self.has_converged(weights, previous_weights):
                 break
@@ -587,9 +590,7 @@ class Gaussbock(object):
         samples = samples[np.all(np.logical_and(samples > low, samples < high), axis = 1), :]
         return samples
 
-    def importance_sampling(self, samples,
-                            model,
-                            ):
+    def importance_sampling(self, samples, model):
         """Re-sample provided data points according to their computed importance weights.
 
         Importance sampling is a general estimation approach for distributions if only samples
@@ -640,7 +641,15 @@ class Gaussbock(object):
         None
         """
         # Apply the procided evaluation function to get the posteriors of all data points
-        posteriors = list(self.pool.map(self.posterior_evaluation, samples))
+        results = list(self.pool.map(self.posterior_evaluation, samples))
+
+        if isinstance(results[0], tuple):
+            posteriors = np.array([r[0] for r in results])
+            derived = [r[1] for r in results]
+        else:
+            posteriors = np.array(results)
+            derived = None
+
         # Use the model's built-in scoring function to get the posteriors w.r.t. the model
         proposal = model.score_samples(X = samples)
         # Get the importance weights for all the data points via element-wise subtraction
@@ -653,7 +662,7 @@ class Gaussbock(object):
         importance_probability = np.divide(smoothed_probability, sum(smoothed_probability))
         # Check whether the function is called to calculate and return the importance weights
         importance_weights = np.log(importance_probability)
-        return importance_weights
+        return posteriors, importance_weights, derived
 
     def weight_truncation(self, importance_probability):
         """Transform the handed probabilities to combat dominating data points
