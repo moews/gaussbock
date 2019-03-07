@@ -427,10 +427,9 @@ class Gaussbock(object):
 
         results = self.final_iteration(samples, weights, output_samples, weights_and_model)
 
-
         # Stop the pool at this point to avoid simply letting the process hang indefinitely
         if not self.user_pool:
-            pool.close()
+            self.pool.close()
 
         # Return the results, the exact contents of which will depend on self.weights_and_model
         return results
