@@ -133,14 +133,12 @@ class Gaussbock(object):
                   model_selection = None,
                   kde_bandwidth = 0.5,
                   pool = None):
-        """Sample data points from a parameter space's approximated probability distribution.
+        """Create a sampler object that can be used to generate points from
+        a parameter space's approximated probability distribution.
 
-        This is the primary function of 'gaussbock', allowing access to its functionality
-        with one simple function call. Most parameters default to reasonably well-behaved
-        values and don't need to be customized to get good results. The only parameters that
-        the user has to specify is the allowed range for each variable (i.e. dimension), an
-        evaluation function that takes one data point and returns its posterior probability,
-        and the desired number of samples from the approximated posterior distribution.
+        After creating the object you can call the sample method to run the main
+        sampler, or for more fine-grained control you can call some of the methods
+        directly.
 
         Parameters:
         -----------
@@ -151,6 +149,7 @@ class Gaussbock(object):
         posterior_evaluation : function
             The evaluation function that takes a single data point in the parameter space and
             then returns the logarithmic posterior value for the specific given data point.
+            Optionally, the function can also return a second argument
 
         gaussbock_iterations : int, defaults to None
             The number of iterations that gaussbock should circle through to achieve a fit.
@@ -185,9 +184,6 @@ class Gaussbock(object):
         processes : int, defaults to 1
             The number of processes the code should invoke for its parallelizable parts.
 
-        weights_and_model : boolean, defaults to False
-            The boolean value indicating whether to return importance weights and the model.
-
         truncation_alpha : float from [1.0, 3.0], defaults to 2.0
             The truncation value for importance probability re-weighting. A higher value
             leads to a more general fitting with strong truncation, whereas a smaller value
@@ -202,23 +198,16 @@ class Gaussbock(object):
         kde_bandwidth : float, defaults to 0.5
             The kernel bandwidth that should be used in the case of kernel density estimation.
 
-        DOC: pool
+        pool : object or None
+            Supply a parallelization pool, for example from Schwimmbad.
+            If not supplied you can set the processes and mpi_parallelization options
+            to have Gaussbock make one of these for you.
 
-        Returns:
-        --------
-        samples : array-like or list
-            A set of samples of the size that is specified in the parameter output_samples if
-            'weights_and_model' is false, which is the default. If 'weights_and_model' is true,
-            a list with the above set of samples, the importance weights of the last model and
-            the model itself is returned. The list elements always follow this order:
-
-            0 : Samples generated with the final model
-            1 : Importance weights for the final model
-            2 : The final model itself to sample from
 
         Attributes:
         -----------
-        None
+        The arguments above are set as attributes on the created object.
+
         """
         # Set the random seed
         #np.random.seed(0)
@@ -276,8 +265,20 @@ class Gaussbock(object):
             #model_components = 50
 
     def select_initial_sample(self, initial_samples):
-        # DOC
-        # Check whether to get initial samples via emcee or use a set
+        """Choose an initial sample set, either using the samples provided 
+        directly by the user or with emcee.
+
+        Parameters
+        ----------
+
+        initial_samples: list
+            Either ['custom', array] where array is an ndim x nsample array of starting points,
+            or ['automatic', n_walkers, n_sample] to initialize using an emcee run with those parameters
+
+        Returns : array-like
+            Array of samples to use to start the Gaussbock iterations.
+
+        """
 
 
         if initial_samples[0] == 'automatic':
@@ -299,7 +300,43 @@ class Gaussbock(object):
         return samples
 
     def next_iteration(self, samples, weights, i):
-        # DOC
+        """Run a single iteration of the Gaussbock sampler, starting
+        from the samples and weights from a previous iteration.
+
+        - selects a tolerance to use
+        - fits a model to the provided samples and weights
+        - draws samples from that model
+        - removes samples outside the parameters bounds
+        - importance samples those parameters
+
+        Parameters
+        ----------
+        samples : array-like
+            Array of samples to start this iteration from
+
+        weights : array-like
+            Log(weight) values for the provided samples
+
+        i : int
+            index of this iteration (used to compute the target tolerance)
+
+        Returns
+        -------
+        samples:
+            samples generated from this iteration
+
+        posts: array-like
+            posterior values for the resulting samples
+
+        weights: array-like
+            log(weight) values for the resulting samples
+
+        derived: list or None
+            If the posterior function returns them as a second result, this is
+            the list of those values.  Otherwise it will be None
+
+
+        """
         print('ITERATION %d\n' % i)
 
 
@@ -331,10 +368,51 @@ class Gaussbock(object):
                                            )
         print('\n===> DONE\n')
 
-        return samples, weights, derived
+        return samples, posts, weights, derived
 
-    def final_iteration(self, samples, weights, output_samples, weights_and_model):
-        # DOC
+    def final_iteration(self, samples, weights, output_samples, weights_and_model=True):
+        """Run the final iteration of the Gaussbock sampling process
+
+        Params:
+        -------
+        samples : array-like
+            Array of samples to start this iteration from
+
+        weights : array-like
+            Log(weight) values for the provided samples
+
+        output_samples: int
+            Number of samples to generate
+
+        weights_and_model: bool, default=True
+            If True, return importance-sampled results
+            If False, return samples directly from the final fitted mixture model
+
+
+        Returns:
+        --------
+        samples : array-like or list
+            A set of samples of the size that is specified in the parameter output_samples if
+            'weights_and_model' is false, which is the default. 
+
+        posts : array
+            The true posterior values for the samples.
+            Only provided if weights_and_model=True
+
+        weights: array
+            Log-weight importance values for the samples
+            Only provided if weights_and_model=True
+
+        derived: list
+            Derived parameters per sample.
+            Only provided if weights_and_model=True, and the posterior function you provide returns
+            derived parameters a second output.
+
+        mixture_model: object
+            Scikit-learn object describing the fitted model.
+            Only provided if weights_and_model=True.
+
+        """
         # Fit the final model to the data points provided by the loop
         print('PROCESS: Fitting the final model ...')
         print('------------------------------------\n')
@@ -376,6 +454,25 @@ class Gaussbock(object):
                 return samples, posts, weights, derived, mixture_model
 
     def has_converged(self, weights, previous_weights):
+        """Optionally run a convergence test comparing the previous iteration's weights to the 
+        current iteration, comparing them to the convergence_threshold. If the latter is not
+        set then False is always returned.
+
+        Params
+        ------
+        weights : array-like
+            Current log-weights
+
+        previous_weights : array-like
+            Previous log-weights
+
+        Returns
+        -------
+        converged: bool
+            Whether the difference between the variances of the two weight
+            samples is below the threshold, or False if no threshold was set.
+
+        """
         if not self.convergence_check:
             return False
         # Calculate the inter-iteration variance difference
@@ -391,8 +488,50 @@ class Gaussbock(object):
         print('Converged: %s\n' % converged)
         return converged
 
-    def sample(self, initial_samples, output_samples, weights_and_model):
-        # Check if the parameter 'input_samples' is withing the allowed set
+    def sample(self, initial_samples, output_samples, weights_and_model=True):
+        """
+        Run the Gaussbock sampling process, starting as specified in initial_samples,
+        and generating output_samples number of samples.
+
+        Params:
+        -------
+        initial_samples: list or None
+            Either ['custom', array] where array is an ndim x nsample array of starting points,
+            or ['automatic', n_walkers, n_sample] to initialize using an emcee run with those parameters
+            or None, to use an emcee run with 2*ndim+2 walkers and 1000 samples/walker.
+
+        output_samples: int
+            Number of samples to generate
+
+        weights_and_model: bool, default=True
+            If True, return importance-sampled results
+            If False, return samples directly from the final fitted mixture model
+
+
+        Returns:
+        --------
+        samples : array-like or list
+            A set of samples of the size that is specified in the parameter output_samples if
+            'weights_and_model' is false, which is the default. 
+
+        posts : array
+            The true posterior values for the samples.
+            Only provided if weights_and_model=True
+
+        weights: array
+            Log-weight importance values for the samples
+            Only provided if weights_and_model=True
+
+        derived: list
+            Derived parameters per sample.
+            Only provided if weights_and_model=True, and the posterior function you provide returns
+            derived parameters a second output.
+
+        mixture_model: object
+            Scikit-learn object describing the fitted model.
+            Only provided if weights_and_model=True.
+
+        """
         if initial_samples == None:
             walker_number = int(np.multiply(len(self.parameter_ranges), 2) + 2)
             initial_samples = ['automatic', walker_number, 1000]
@@ -418,7 +557,7 @@ class Gaussbock(object):
             if i>0:
                 previous_weights = weights
 
-            samples, weights, derived = self.next_iteration(samples, weights, i)
+            samples, _, weights, _ = self.next_iteration(samples, weights, i)
 
             if i>0 and self.has_converged(weights, previous_weights):
                 break
@@ -446,28 +585,11 @@ class Gaussbock(object):
 
         Parameters:
         -----------
-        parameter_ranges : array-like
-            The allowed range for each parameter, signified by a lower and upper limit, with
-            one row per parameter, and lower and upper limits in the first and second column.
-
         emcee_walkers : int
             The number of separate walkers that emcee should deploy to gather first samples.
 
         emcee_steps : int
             The number of steps in a chain that emcee walkers should take before termination.
-
-        posterior_evaluation : function
-            The evaluation function that takes a single data point in the parameter space and
-            then returns the logarithmic posterior value for the specific given data point.
-
-        mpi_parallelization : boolean
-            The boolean value indicating whether to parallelize the code via an MPIPool.
-
-        processes : int
-            The number of processes the code should invoke for its parallelizable parts.
-
-        pool : schwimmbad pool
-            The pool created via 'schwimmbad' and returned by the pool_type() function.
 
         Returns:
         --------
@@ -509,16 +631,9 @@ class Gaussbock(object):
         code will try to fulfill this wish. If the latter fails or one process is explicitly
         indicated, the default of one process will result in the usage of a SerialPool.
 
+        You can also provide a pool object directly in the constructor, in which case that
+        will be used.
 
-        Parameters:
-        -----------
-        mpi_parallelization : boolean
-            The boolean value indicating whether to parallelize the code via an MPIPool.
-
-        processes : int
-            The number of processes the code should invoke for its parallelizable parts.
-
-        DOC: pool
 
         Returns:
         --------
@@ -529,10 +644,6 @@ class Gaussbock(object):
         -----------
         None
         """
-
-        # May be using a user-supplied external pool.
-        # In this case we shouldn't close it at the end of the
-        # sampling.
 
         if self.user_pool is not None:
             print('NOTE: Running with user-supplied pool: {}'.format(self.user_pool))
@@ -570,10 +681,6 @@ class Gaussbock(object):
         samples : array-like
             The set data points from which the ones outside the allowed ranges should be cut.
 
-        parameter_ranges : array-like
-            The allowed range for each parameter, signified by a lower and upper limit, with
-            one row per parameter, and lower and upper limits in the first and second column.
-
         Returns:
         --------
         samples : array-like
@@ -603,32 +710,9 @@ class Gaussbock(object):
         -----------
         samples : array-like
             The set of provided data points that importance sampling should be run on.
-
-        mixture_samples : int
-            The number of samples to be drawn from the model before each importance sampling.
-
-        posterior_evaluation : function
-            The evaluation function that takes a single data point in the parameter space and
-            then returns the logarithmic posterior value for the specific given data point.
-
-        mpi_parallelization : boolean
-            The boolean value indicating whether to parallelize the code via an MPIPool.
-
-        processes : int
-            The number of processes the code should invoke for its parallelizable parts.
-
-        pool : schwimmbad pool
-            The pool created via 'schwimmbad' and returned by the pool_type() function.
-
-        parameter_number : int
-            The number of dimensions that the algorithm operates in for the given problem.
-
-        truncation_alpha : float
-            The truncation value for importance probability re-weighting. This parameter must
-            be a float from the interval[1.0, 3.0]. A higher value leads to a looser fitting
-            with strong truncation, whereas a smaller value leads to a higher level of retaining
-            dominant data points as such. It is recommended to only alter this parameter if the
-            resulting posterior approximation is problematic and can't be otherwise resolved.
+        
+        model : scikit learn model
+            The model used to generate the samples
 
         Returns:
         --------
@@ -675,24 +759,11 @@ class Gaussbock(object):
         importance_probability : array-like
             The one-dimensional array of importance probabilities that should be smoothed.
 
-        mixture_samples : int
-            The number of samples to be drawn from the model before each importance sampling.
-
-        truncation_alpha : float
-            The truncation value for importance probability re-weighting. This parameter must
-            be a float from the interval[1.0, 3.0]. A higher value leads to a looser fitting
-            with strong truncation, whereas a smaller value leads to a higher level of retaining
-            dominant data points as such. It is recommended to only alter this parameter if the
-            resulting posterior approximation is problematic and can't be otherwise resolved.
-
         Returns:
         --------
         normalized_result : array-like
             A transformed array of probabilities with slightly less pronounced inequalities.
 
-        Attributes:
-        -----------
-        None
         """
         # Compute the mean of the importance probabilities provided as input
         mean_probability = np.mean(importance_probability)
@@ -711,7 +782,28 @@ class Gaussbock(object):
         return normalized_result
 
     def generate_equally_weighted_subsample(self, samples, weights):
-        # DOC
+        """
+        Take a set of samples with various log-weights and select a sub-sample of them
+        with probabilities proportional to the weights.
+
+        This will result in a sample which can be used with unit weights.
+
+        Params
+        ------
+
+        samples : array-like
+            The set of samples to use
+
+        weights : array-like
+            log(weight) values per sample
+        
+        Returns
+        -------
+
+        subsample : array-like
+            A sub-sample of the input samples
+
+        """
         importance_probability = np.exp(weights)
         importance_probability /= importance_probability.sum()
         sampling_index = np.random.choice(a = samples.shape[0],
@@ -736,30 +828,12 @@ class Gaussbock(object):
         samples : array-like
             The set of provided data points that the function's model should be fitted to.
 
-        model_components : int, defaults to rounding up (2 / 3) * the number of dimensions
-            The maximum number of Gaussians to be fitted to data points in each iteration.
-
-        model_covariance : {'full', 'tied', 'diag', 'spherical'}
-            The type of covariance parameters the model should use for the fitting process.
+        weights : array-like
+            Log(weight) values per sample
 
         tolerance : float
             The model's convergence threshold at which the model's fit is deemed finalized.
 
-        em_iterations : int
-            The maximum number of expectation maximization iterations the model should run.
-
-        parameter_init :  {'kmeans', 'random'}
-            The method used to initialize the model's weights, the means and the covariances.
-
-        model_verbosity : {0, 1, 2}
-            The amount of information that the model fitting should provide during runtime.
-
-        model_selection : {'gmm', 'kde'}
-            The selection of the type of model that should be used for the fitting process,
-            i.e. either a variational Bayesian non-parametric GMM or kernel density estimation.
-
-        kde_bandwidth : float
-            The kernel bandwidth that should be used in the case of kernel density estimation.
 
         Returns:
         --------
@@ -822,12 +896,6 @@ class Gaussbock(object):
 
         Parameters:
         -----------
-        tolerance_range : list
-            The two ends for the shrinking convergence threshold as a tuple [float, float].
-
-        gaussbock_iterations : int
-            The number of iterations that gaussbock should circle through to achieve a fit.
-
         step : int
             the index of the current iteration, i.e. a counter to keep track of progress.
 
@@ -855,77 +923,17 @@ class Gaussbock(object):
         Sometimes, users might provide parameters in formats or with values that aren't
         expected and would, therefore, lead to a crash. In order to prevent waiting for the
         code to reach such a breaking point, all parameters are checked in the beginning.
-        The code will terminate with a descriptive error message in case of discrepancies.
+        The code will raise a descriptive error message in case of discrepancies.
 
         Parameters:
         -----------
-        parameter_ranges : array-like
-            The allowed range for each parameter, signified by a lower and upper limit, with
-            one row per parameter, and lower and upper limits in the first and second column.
-
-        posterior_evaluation : function
-            The evaluation function that takes a single data point in the parameter space and
-            then returns the logarithmic posterior value for the specific given data point.
-
-        output_samples : int
-            The number of samples generated from the final model's posterior approximation.
-
-        initial_samples : {['automatic', int, int], ['custom', array-like]}
-            The specification whether 'emcee' should be used to generate the initial set of
-            data points, with the number of walkers and the number of chain steps specified,
-            or whether a custom pre-prepared set of data points should be used instead.
-
-        gaussbock_iterations : int
-            The number of iterations that gaussbock should circle through to achieve a fit.
-
-        mixture_samples : int
-            The number of samples to be drawn from the model before each importance sampling.
-
-        em_iterations : int
-            The maximum number of expectation maximization iterations the model should run.
-
-        tolerance_range : list
-            The two ends for the shrinking convergence threshold as a tuple [float, float].
-
-        model_components : int
-            The maximum number of Gaussians to be fitted to data points in each iteration.
-
-        model_covariance : {'full', 'tied', 'diag', 'spherical'}
-            The type of covariance parameters the model should use for the fitting process.
-
-        parameter_init :  {'kmeans', 'random'}
-            The method used to initialize the model's weights, the means and the covariances.
-
-        model_verbosity : {0, 1, 2}
-            The amount of information that the model fitting should provide during runtime.
-
-        mpi_parallelization : boolean
-            The boolean value indicating whether to parallelize the code via an MPIPool.
-
-        processes : int
-            The number of processes the code should invoke for its parallelizable parts.
-
-        truncation_alpha : float
-            The truncation value for importance probability re-weighting. This parameter must
-            be a float from the interval[1.0, 3.0]. A higher value leads to a looser fitting
-            with strong truncation, whereas a smaller value leads to a higher level of retaining
-            dominant data points as such. It is recommended to only alter this parameter if the
-            resulting posterior approximation is problematic and can't be otherwise resolved.
-
-        model_selection : {'gmm', 'kde'}
-            The selection of the type of model that should be used for the fitting process,
-            i.e. either a variational Bayesian non-parametric GMM or kernel density estimation.
-
-        kde_bandwidth : float
-            The kernel bandwidth that should be used in the case of kernel density estimation.
+        None
 
         Returns:
         --------
         None
 
-        Attributes:
-        -----------
-        None
+
         """
         # Create a vector of boolean values to keep track of incorrect inputs
         errors = []
@@ -944,6 +952,7 @@ class Gaussbock(object):
             try:
                 test_posterior = self.posterior_evaluation(test_point)
             except:
+                raise
                 errors.append('ERROR: posterior_evaluation: Must be a suitable function for this problem')
         except:
             # Let the function resume, as a faulty 'parameter_ranges' will terminate
@@ -1044,12 +1053,114 @@ def gaussbock(parameter_ranges,
               model_verbosity = 1,
               mpi_parallelization = False,
               processes = 1,
-              weights_and_model = False,
+              weights_and_model = True,
               truncation_alpha = 2.0,
               model_selection = None,
               kde_bandwidth = 0.5,
               pool = None):
+    """
+    This is the primary function of 'gaussbock', allowing access to its functionality
+    with one simple function call. Most parameters default to reasonably well-behaved
+    values and don't need to be customized to get good results. The only parameters that
+    the user has to specify is the allowed range for each variable (i.e. dimension), an
+    evaluation function that takes one data point and returns its posterior probability,
+    and the desired number of samples from the approximated posterior distribution.
 
+    Parameters:
+    -----------
+    parameter_ranges : array-like
+        The allowed range for each parameter, signified by a lower and upper limit, with
+        one row per parameter, and lower and upper limits in the first and second column.
+
+    posterior_evaluation : function
+        The evaluation function that takes a single data point in the parameter space and
+        then returns the logarithmic posterior value for the specific given data point.
+        Optionally, the function can also return a second argument
+
+    output_samples : int
+        The number of samples to generate.
+
+    gaussbock_iterations : int, defaults to None
+        The number of iterations that gaussbock should circle through to achieve a fit.
+        
+    convergence_threshold : float, defaults to None
+        The threshold to determine inter-iteration importance resampling convergence.
+
+    mixture_samples : int, defaults to 10000
+        The number of samples to be drawn from the model before each importance sampling.
+
+    em_iterations : int, defaults to 1000
+        The maximum number of expectation maximization iterations the model should run.
+
+    tolerance_range : list, defaults to [1e-2, 1e-7]
+        The two ends for the shrinking convergence threshold as a tuple [float, float].
+
+    model_components : int, defaults to rounding up (2 / 3) * the number of dimenzsions
+        The maximum number of Gaussians to be fitted to data points in each iteration.
+
+    model_covariance : {'full', 'tied', 'diag', 'spherical'}, defaults to 'full'
+        The type of covariance parameters the model should use for the fitting process.
+
+    parameter_init :  {'kmeans', 'random'}, defaults to 'random'
+        The method used to initialize the model's weights, the means and the covariances.
+
+    model_verbosity : {0, 1, 2}, defaults to 1
+        The amount of information that the model fitting should provide during runtime.
+
+    mpi_parallelization : boolean, defaults to False
+        The boolean value indicating whether to parallelize the code via an MPIPool.
+
+    processes : int, defaults to 1
+        The number of processes the code should invoke for its parallelizable parts.
+
+    weights_and_model: bool, defaults to True
+        If True, return importance-sampled results
+        If False, return samples directly from the final fitted mixture model
+
+    truncation_alpha : float from [1.0, 3.0], defaults to 2.0
+        The truncation value for importance probability re-weighting. A higher value
+        leads to a more general fitting with strong truncation, whereas a smaller value
+        leads to a higher level of retaining dominant data points as such. It is generally
+        recommended to only alter this parameter if the resulting posterior approximation
+        is problematic and the issue can't be resolved by adjusting other parameters.
+
+    model_selection : {None, 'gmm', 'kde'}, defaults to None
+        The selection of the type of model that should be used for the fitting process,
+        i.e. either a variational Bayesian non-parametric GMM or kernel density estimation.
+
+    kde_bandwidth : float, defaults to 0.5
+        The kernel bandwidth that should be used in the case of kernel density estimation.
+
+    pool : object or None
+        Supply a parallelization pool, for example from Schwimmbad.
+        If not supplied you can set the processes and mpi_parallelization options
+        to have Gaussbock make one of these for you.
+
+    Returns:
+    --------
+    samples : array-like or list
+        A set of samples of the size that is specified in the parameter output_samples if
+        'weights_and_model' is false, which is the default. 
+
+    posts : array
+        The true posterior values for the samples.
+        Only provided if weights_and_model=True
+
+    weights: array
+        Log-weight importance values for the samples
+        Only provided if weights_and_model=True
+
+    derived: list
+        Derived parameters per sample.
+        Only provided if weights_and_model=True, and the posterior function you provide returns
+        derived parameters a second output.
+
+    mixture_model: object
+        Scikit-learn object describing the fitted model.
+        Only provided if weights_and_model=True.
+
+
+    """
     sampler = Gaussbock(parameter_ranges,
                   posterior_evaluation,
                   gaussbock_iterations = gaussbock_iterations, 
