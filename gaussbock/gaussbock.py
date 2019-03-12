@@ -880,7 +880,7 @@ class Gaussbock(object):
                         warm_start = False,
                         random_state = 42,
                         weight_concentration_prior_type = 'dirichlet_process')
-            print("why is the random_state set to 42?")
+
         if self.model_selection == 'kde':
             model = KD(bandwidth = self.kde_bandwidth,
                        kernel = 'gaussian',
