@@ -480,7 +480,12 @@ class Gaussbock(object):
         v2 = np.var(previous_weights)
         var_difference = np.absolute(v1 - v2)
         converged = var_difference < self.convergence_threshold
+        # Also interesting to print out the effective number of samples
+        # this iteration, just for interest
+        w = np.exp(weights - weights.max())
+        neff = w.sum()**2 / (w**2).sum()
         print("\nCONVERGENCE TEST:")
+        print("[Effective samples: %.1f]" % neff)
         print("Previous var(weights) = %f"%v2)
         print("Current  var(weights) = %f"%v1)
         print('Difference: %f' % var_difference)
