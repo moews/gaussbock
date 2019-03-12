@@ -739,10 +739,14 @@ class Gaussbock(object):
             posteriors = np.array(results)
             derived = None
 
+        # Replace NaNs with -inf
+        posteriors[np.isnan(posteriors)] = -np.inf
         # Use the model's built-in scoring function to get the posteriors w.r.t. the model
         proposal = model.score_samples(X = samples)
         # Get the importance weights for all the data points via element-wise subtraction
         importance_weights = posteriors - proposal
+        # Normalize the weights
+        importance_weights -= importance_weights.max()
         # Calculate the importance probabilities for the purpose of subsequent resampling
         importance_probability = np.exp(importance_weights)
         # Smooth the importance probabilities with truncation to penalize dominant samples
