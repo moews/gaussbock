@@ -24,13 +24,13 @@ Alternatively, the file `gaussbock.py` can be downloaded from the folder `gaussb
 
 Only three inputs are required by Gaussbock: The list of parameter ranges, each as a tuple with the lower and upper limit for each parameter (`parameter_ranges`), the handle for a posterior function that is to be used to evaluate samples (`posterior_evaluation`), and the required number of posterior samples in the output (`output_samples`).
 
-A vaiety of optional inputs can bet set. An affine-invariate MCMC ensemble to obtain an initial approximation of the posterior can be used, or users provide their own initial sample (`initial_samples`). This takes the form `['automatic', int, int]` for the MCMC ensemble, with the integer referring to the number of walker and steps per walker, respectively, or `['custom', array-like]`, with the array-like object providing the initial samples in the parameter space. The maximum number of Gaussbock iterations (`gaussbock_iterations`) can be set as well as the number of samples that are drawn from the current posterior approximation before each truncated importance sampling step (`mixture_samples`) and the maximum number of expectation-maximization (EM) iterations to fit the variational Bayesian GMM (`em_iterations`).
+Gaussbock offers a variety of optional inputs. An affine-invariate MCMC ensemble to obtain an initial approximation of the posterior can be used, or users provide their own initial sample (`initial_samples`). This takes the form `['automatic', int, int]` for the MCMC ensemble, with the integer referring to the number of walker and steps per walker, respectively, or `['custom', array-like]`, with the array-like object providing the initial samples in the parameter space. The maximum number of Gaussbock iterations (`gaussbock_iterations`) can be set, as can the number of samples that are drawn from the current posterior approximation before each truncated importance sampling step (`mixture_samples`) and the maximum number of expectation-maximization (EM) iterations to fit the variational Bayesian GMM (`em_iterations`).
 
 In addition, the start and end for a shrinking convergence threshold for the posterior fitting in the form `[float, float]` can be provided (`tolerance_range`), as can the maximum number of Gaussians to be fitted to samples in each iteration (`model_components`) and the tpe of covariance parameters from the set `{'full', 'tied', 'diag', spherical'}` used for the fitting process (`model_covariance`). Another optional input is the method used to initialize the model's weights, means and covariances as either `'kmeans'` or `'random'` as possible values (`parameter_init`). The armount of information the model fitting should provide during runtime can be set as `0`, `1` or `2` (`model_verbosity`).
 
 In order to make use of parallelization, the user can either choose to use MPI pools and set the corresponding input to `True` (`mpi_parallelization`), for example for running on supercomputers or local clusters, or specify a number of processes for multi-core parallelization (`processes`). Another boolean input is the choice whether both the importance weights and the final model should be returned (`weights_and_model`). Since truncated importance sampling is used, the truncation value for importance probability re-weighting can be chosen as a float from `[1.0, 3.0]`. Lower values lead to a more general fitting with strong truncation, whereas smaller values result in a higher level of retaining dominant data points. This input should only be customized if the posterior approximation is problematic and can't be resolved via other inputs.
 
-The model used for the fitting process can be selected, with `'kde`' for kernel density estimation (KDE) being the default for problems in less than three dimensions, and `'gmm'` being the default otherwise to use the variational Bayesian GMM suitable for higher-dimensional problems. Lastly, if KDE is used, the kernel bandwidth that should be used can be specified (`kde_bandwidth`). The required and optional inputs, together with their default values, are listed below, with _D_ denoting the dimensionality of the parameter estimation problem, or the number of parameters.
+The model used for the fitting process can be selected, with `'kde`' for kernel density estimation (KDE) being the default for problems in less than three dimensions, and `'gmm'` being the default otherwise to use the variational Bayesian GMM suitable for higher-dimensional problems. Lastly, if KDE is used, the kernel bandwidth that should be used can be specified (`kde_bandwidth`). The required and optional inputs, together with their default values and with optional inputs marked with an asterisk, are listed below, with _D_ denoting the dimensionality of the parameter estimation problem, or the number of parameters.
 
 
 <br></br>
@@ -40,22 +40,22 @@ The model used for the fitting process can be selected, with `'kde`' for kernel 
 | parameter_ranges                 | The lower and upper limit for each parameter              |                          |
 | posterior_evaluation             | Evaluation function handle for the posterior              |                          |
 | output_samples                   | Number of posterior samples that are required             |                          |
-| initial_samples (optional)       | Choice of 'emcee' or a provided start sample              | ['automatic', 50, 1000]  |
-| gaussbock_iterations (optional)  | Maximum number of Gaussbock iterations                    | 10                       |
-| convergence_threshold (optional) | Threshold for inter-iteration convegence checks           | 1e-3                     |
-| mixture_samples (optional)       | Number of samples drawn for importance sampling           | 1e5                      |
-| em_iterations (optional)         | Maximum number of EM iterations for the mixture model     | 1000                     |
-| tolerance_range (optional)       | The range for the shrinking convergence threshold         | [1e-2, 1e-7]             |
-| model_components (optional)      | Maximum number of Gaussians fitted to samples             | ceiling((2 / 3) * _D_)   |
-| model_covariance (optional)      | Type of covariance for the GMM fitting process            | 'full'                   |
-| parameter_init (optional)        | How to intialize model weights, means and covariances     | 'random'                 |
-| model_verbosity (optional)       | The amount of information printed during runtime          | 1                        |
-| mpi_parallelization (optional)   | Whether to parallelize Gaussbock using an MPI pool        | False                    |
-| processes (optional)             | Number of processes Gaussbock should parallelize over     | 1                        |
-| weights_and_model (optional)     | Whether to return importance weights and the model        | False                    |
-| truncation_alpha (optional)      | Truncation value for importance probability re-weighting  | 2.0                      |
-| model_selection (optional)       | Type of model used for the fitting process                | None                     |
-| kde_bandwidth (optional)         | Kernel bandwidth used when fitting via KDE                | 0.5                      |
+| * initial_samples                | Choice of 'emcee' or a provided start sample              | ['automatic', 50, 1000]  |
+| * gaussbock_iterations           | Maximum number of Gaussbock iterations                    | 10                       |
+| *convergence_threshold           | Threshold for inter-iteration convegence checks           | 1e-3                     |
+| * mixture_samples                | Number of samples drawn for importance sampling           | 1e5                      |
+| * em_iterations                  | Maximum number of EM iterations for the mixture model     | 1000                     |
+| * tolerance_range                | The range for the shrinking convergence threshold         | [1e-2, 1e-7]             |
+| * model_components               | Maximum number of Gaussians fitted to samples             | ceiling((2 / 3) * _D_)   |
+| * model_covariance               | Type of covariance for the GMM fitting process            | 'full'                   |
+| * parameter_init                 | How to intialize model weights, means and covariances     | 'random'                 |
+| * model_verbosity                | The amount of information printed during runtime          | 1                        |
+| * mpi_parallelization            | Whether to parallelize Gaussbock using an MPI pool        | False                    |
+| * processes                      | Number of processes Gaussbock should parallelize over     | 1                        |
+| * weights_and_model              | Whether to return importance weights and the model        | False                    |
+| * truncation_alpha               | Truncation value for importance probability re-weighting  | 2.0                      |
+| * model_selection                | Type of model used for the fitting process                | None                     |
+| * kde_bandwidth                  | Kernel bandwidth used when fitting via KDE                | 0.5                      |
 
 <br></br>
 
