@@ -3,7 +3,7 @@ from setuptools import setup
 setup(
   name = 'gaussbock',
   packages = ['gaussbock'],
-  version = '1.0.4',
+  version = '1.0.5',
   description = 'Fast cosmological parameter estimation with parallel iterative Bayesian nonparametrics',
   long_description='Preliminary documentation can be found in the docstrings, the paper will appear on arXiv shortly',
   author = 'Ben Moews',
