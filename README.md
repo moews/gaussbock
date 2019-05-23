@@ -54,7 +54,7 @@ The model used for the fitting process can be selected, with `'kde`' for kernel 
 | * processes                      | Number of processes Gaussbock should parallelize over     | 1                        |
 | * weights_and_model              | Whether to return importance weights and the model        | False                    |
 | * truncation_alpha               | Truncation value for importance probability re-weighting  | 2.0                      |
-| * model_selection                | Type of model used for the fitting process                | 'gmm' if dim (D) > 2, else 'kde'                    |
+| * model_selection                | Type of model used for the fitting process                | None                     |
 | * kde_bandwidth                  | Kernel bandwidth used when fitting via KDE                | 0.5                      |
 
 <br></br>
