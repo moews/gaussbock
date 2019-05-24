@@ -1,12 +1,16 @@
 from setuptools import setup
 
+with open("README.md", "r") as fh:
+    long_description = fh.read()
+
 setup(
   name = 'gaussbock',
   packages = ['gaussbock'],
-  version = '1.0.5',
-  description = 'Fast cosmological parameter estimation with parallel iterative Bayesian nonparametrics',
-  long_description='Preliminary documentation can be found in the docstrings, the paper will appear on arXiv shortly',
-  author = 'Ben Moews',
+  version = '1.0.7',
+  description = 'Fast parallel-iterative cosmological parameter estimation with Bayesian nonparametrics',
+  long_description = long_description,
+  long_description_content_type = 'text/markdown',
+  author = 'Ben Moews and Joe Zuntz',
   author_email = 'ben.moews@protonmail.com',
   url = 'https://github.com/moews/gaussbock',
   keywords = ['astronomy',
