@@ -6,7 +6,7 @@ with open("README.md", "r") as fh:
 setup(
   name = 'gaussbock',
   packages = ['gaussbock'],
-  version = '1.0.8',
+  version = '1.0.9',
   description = 'Fast parallel-iterative cosmological parameter estimation with Bayesian nonparametrics',
   long_description = long_description,
   long_description_content_type = 'text/markdown',
